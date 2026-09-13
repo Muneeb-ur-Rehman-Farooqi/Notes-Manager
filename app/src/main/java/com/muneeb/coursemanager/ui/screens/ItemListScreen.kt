@@ -49,8 +49,10 @@ import androidx.navigation.NavController
 import com.muneeb.coursemanager.data.entities.Category
 import com.muneeb.coursemanager.data.entities.Item
 import com.muneeb.coursemanager.data.entities.ItemType
+import com.muneeb.coursemanager.data.entities.Page
 import com.muneeb.coursemanager.data.repository.CategoryRepository
 import com.muneeb.coursemanager.data.repository.ItemRepository
+import com.muneeb.coursemanager.data.repository.PageRepository
 import com.muneeb.coursemanager.navigation.Routes
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -71,6 +73,7 @@ data class ItemListUiState(
 class ItemListViewModel(
     private val itemRepository: ItemRepository,
     private val categoryRepository: CategoryRepository,
+    private val pageRepository: PageRepository,
     val categoryId: Long
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ItemListUiState())
@@ -111,6 +114,34 @@ class ItemListViewModel(
         }
     }
 
+    suspend fun addPhotoGroup(uris: List<Uri>) {
+        if (uris.isEmpty()) return
+        try {
+            val dateStr = SimpleDateFormat("dd MMM yyyy HH:mm", Locale.getDefault())
+                .format(Date())
+            val displayName = "Photos - $dateStr"
+            val item = Item(
+                categoryId = categoryId,
+                itemType = ItemType.PHOTO_GROUP,
+                displayName = displayName,
+                sortOrder = _uiState.value.items.size
+            )
+            val newItemId = itemRepository.insert(item)
+            uris.forEachIndexed { index, uri ->
+                pageRepository.insert(
+                    Page(
+                        itemId = newItemId,
+                        photoUri = uri.toString(),
+                        pageNumber = index
+                    )
+                )
+            }
+            loadData()
+        } catch (e: Exception) {
+            _uiState.update { it.copy(error = "Failed to add photos: ${e.message}") }
+        }
+    }
+
     suspend fun updateLastOpened(itemId: Long) {
         itemRepository.updateLastOpened(itemId, System.currentTimeMillis())
     }
@@ -118,12 +149,15 @@ class ItemListViewModel(
     class Factory(
         private val itemRepository: ItemRepository,
         private val categoryRepository: CategoryRepository,
+        private val pageRepository: PageRepository,
         private val categoryId: Long
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             if (modelClass.isAssignableFrom(ItemListViewModel::class.java)) {
-                return ItemListViewModel(itemRepository, categoryRepository, categoryId) as T
+                return ItemListViewModel(
+                    itemRepository, categoryRepository, pageRepository, categoryId
+                ) as T
             }
             throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
         }
@@ -172,6 +206,26 @@ fun ItemListScreen(
                         viewModel.addItem(item)
                     }
                 }
+            }
+        }
+    }
+
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenMultipleDocuments()
+    ) { uris: List<Uri> ->
+        if (uris.isNotEmpty()) {
+            uris.forEach { uri ->
+                try {
+                    context.contentResolver.takePersistableUriPermission(
+                        uri,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    )
+                } catch (e: SecurityException) {
+                    // ignore
+                }
+            }
+            viewModel.viewModelScope.launch {
+                viewModel.addPhotoGroup(uris)
             }
         }
     }
@@ -238,29 +292,35 @@ fun ItemListScreen(
                                 viewModel.viewModelScope.launch {
                                     viewModel.updateLastOpened(item.itemId)
                                 }
-                                if (item.itemType == ItemType.FILE) {
-                                    val isPdf = item.mimeType == "application/pdf" ||
-                                            item.displayName.endsWith(".pdf", ignoreCase = true)
-                                    if (isPdf) {
-                                        navController.navigate(Routes.pdfViewer(item.itemId))
-                                    } else if (item.uri != null) {
-                                        val intent = Intent(Intent.ACTION_VIEW).apply {
-                                            setDataAndType(
-                                                Uri.parse(item.uri),
-                                                item.mimeType ?: "*/*"
-                                            )
-                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                        }
-                                        try {
-                                            context.startActivity(intent)
-                                        } catch (e: ActivityNotFoundException) {
-                                            Toast.makeText(
-                                                context,
-                                                "No app found to open this file",
-                                                Toast.LENGTH_SHORT
-                                            ).show()
+                                when (item.itemType) {
+                                    ItemType.PHOTO_GROUP -> {
+                                        navController.navigate(Routes.photoViewer(item.itemId))
+                                    }
+                                    ItemType.FILE -> {
+                                        val isPdf = item.mimeType == "application/pdf" ||
+                                                item.displayName.endsWith(".pdf", ignoreCase = true)
+                                        if (isPdf) {
+                                            navController.navigate(Routes.pdfViewer(item.itemId))
+                                        } else if (item.uri != null) {
+                                            val intent = Intent(Intent.ACTION_VIEW).apply {
+                                                setDataAndType(
+                                                    Uri.parse(item.uri),
+                                                    item.mimeType ?: "*/*"
+                                                )
+                                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                            }
+                                            try {
+                                                context.startActivity(intent)
+                                            } catch (e: ActivityNotFoundException) {
+                                                Toast.makeText(
+                                                    context,
+                                                    "No app found to open this file",
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+                                            }
                                         }
                                     }
+                                    else -> { /* NOTE handled elsewhere */ }
                                 }
                             }
                         )
@@ -278,6 +338,13 @@ fun ItemListScreen(
                 onClick = {
                     showMenu = false
                     filePickerLauncher.launch(arrayOf("*/*"))
+                }
+            )
+            DropdownMenuItem(
+                text = { Text("Add Photos") },
+                onClick = {
+                    showMenu = false
+                    photoPickerLauncher.launch(arrayOf("image/*"))
                 }
             )
             DropdownMenuItem(

@@ -30,6 +30,9 @@ object Routes {
     // PDF Viewer
     const val PDF_VIEWER = "pdf_viewer/{itemId}"
 
+    // Photo Group Viewer
+    const val PHOTO_VIEWER = "photo_viewer/{itemId}"
+
     // Helper functions
     fun courseList(semesterId: Long) = "course_list/$semesterId"
     fun categoryList(courseId: Long) = "category_list/$courseId"
@@ -39,4 +42,5 @@ object Routes {
     fun timetableEditor(entryId: Long = -1L) = "timetable_editor?entryId=$entryId"
     fun studyTaskEditor(taskId: Long = -1L) = "study_task_editor?taskId=$taskId"
     fun pdfViewer(itemId: Long) = "pdf_viewer/$itemId"
+    fun photoViewer(itemId: Long) = "photo_viewer/$itemId"
 }

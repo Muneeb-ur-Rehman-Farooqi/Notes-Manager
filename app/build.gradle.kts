@@ -40,4 +40,5 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.10.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.10.0")
     implementation("io.github.oothp:android-pdf-viewer:3.2.0-beta06")
+    implementation("io.coil-kt.coil3:coil-compose:3.5.0")
 }

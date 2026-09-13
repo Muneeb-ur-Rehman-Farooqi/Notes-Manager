@@ -30,6 +30,7 @@ import com.muneeb.coursemanager.data.repository.CategoryRepository
 import com.muneeb.coursemanager.data.repository.CourseRepository
 import com.muneeb.coursemanager.data.repository.ItemRepository
 import com.muneeb.coursemanager.data.repository.OnboardingRepository
+import com.muneeb.coursemanager.data.repository.PageRepository
 import com.muneeb.coursemanager.data.repository.QuickNoteRepository
 import com.muneeb.coursemanager.data.repository.SemesterRepository
 import com.muneeb.coursemanager.data.repository.StudyTaskRepository
@@ -58,6 +59,7 @@ class MainActivity : ComponentActivity() {
         val courseDao = database.courseDao()
         val categoryDao = database.categoryDao()
         val itemDao = database.itemDao()
+        val pageDao = database.pageDao()
         val quickNoteDao = database.quickNoteDao()
         val timetableDao = database.timetableDao()
         val studyTaskDao = database.studyTaskDao()
@@ -66,6 +68,7 @@ class MainActivity : ComponentActivity() {
         val courseRepository = CourseRepository(courseDao)
         val categoryRepository = CategoryRepository(categoryDao)
         val itemRepository = ItemRepository(itemDao)
+        val pageRepository = PageRepository(pageDao)
         val quickNoteRepository = QuickNoteRepository(quickNoteDao)
         val timetableRepository = TimetableRepository(timetableDao)
         val studyTaskRepository = StudyTaskRepository(studyTaskDao)
@@ -89,6 +92,7 @@ class MainActivity : ComponentActivity() {
                         courseRepository = courseRepository,
                         categoryRepository = categoryRepository,
                         itemRepository = itemRepository,
+                        pageRepository = pageRepository,
                         quickNoteRepository = quickNoteRepository,
                         timetableRepository = timetableRepository,
                         studyTaskRepository = studyTaskRepository,
@@ -108,6 +112,7 @@ fun AppContent(
     courseRepository: CourseRepository,
     categoryRepository: CategoryRepository,
     itemRepository: ItemRepository,
+    pageRepository: PageRepository,
     quickNoteRepository: QuickNoteRepository,
     timetableRepository: TimetableRepository,
     studyTaskRepository: StudyTaskRepository,
@@ -193,6 +198,7 @@ fun AppContent(
             courseRepository = courseRepository,
             categoryRepository = categoryRepository,
             itemRepository = itemRepository,
+            pageRepository = pageRepository,
             onboardingRepository = onboardingRepository,
             quickNoteRepository = quickNoteRepository,
             timetableRepository = timetableRepository,

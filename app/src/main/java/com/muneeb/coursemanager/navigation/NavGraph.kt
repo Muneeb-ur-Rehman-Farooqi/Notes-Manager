@@ -21,6 +21,7 @@ import com.muneeb.coursemanager.data.repository.CategoryRepository
 import com.muneeb.coursemanager.data.repository.CourseRepository
 import com.muneeb.coursemanager.data.repository.ItemRepository
 import com.muneeb.coursemanager.data.repository.OnboardingRepository
+import com.muneeb.coursemanager.data.repository.PageRepository
 import com.muneeb.coursemanager.data.repository.QuickNoteRepository
 import com.muneeb.coursemanager.data.repository.SemesterRepository
 import com.muneeb.coursemanager.data.repository.StudyTaskRepository
@@ -43,6 +44,8 @@ import com.muneeb.coursemanager.ui.screens.NotesListScreen
 import com.muneeb.coursemanager.ui.screens.NotesListViewModel
 import com.muneeb.coursemanager.ui.screens.PdfViewerScreen
 import com.muneeb.coursemanager.ui.screens.PdfViewerViewModel
+import com.muneeb.coursemanager.ui.screens.PhotoGroupViewerScreen
+import com.muneeb.coursemanager.ui.screens.PhotoGroupViewerViewModel
 import com.muneeb.coursemanager.ui.screens.QuickNoteEditorScreen
 import com.muneeb.coursemanager.ui.screens.QuickNoteEditorViewModel
 import com.muneeb.coursemanager.ui.screens.SemesterListScreen
@@ -68,6 +71,7 @@ fun AppNavHost(
     courseRepository: CourseRepository,
     categoryRepository: CategoryRepository,
     itemRepository: ItemRepository,
+    pageRepository: PageRepository,
     onboardingRepository: OnboardingRepository,
     quickNoteRepository: QuickNoteRepository,
     timetableRepository: TimetableRepository,
@@ -145,7 +149,9 @@ fun AppNavHost(
             arguments = listOf(navArgument("categoryId") { type = NavType.LongType })
         ) { backStackEntry ->
             val categoryId = backStackEntry.arguments?.getLong("categoryId") ?: 0L
-            val factory = ItemListViewModel.Factory(itemRepository, categoryRepository, categoryId)
+            val factory = ItemListViewModel.Factory(
+                itemRepository, categoryRepository, pageRepository, categoryId
+            )
             val listViewModel: ItemListViewModel = viewModel(factory = factory)
             ItemListScreen(navController = navController, viewModel = listViewModel, onMenuClick = onMenuClick)
         }
@@ -202,6 +208,23 @@ fun AppNavHost(
             PdfViewerScreen(
                 navController = navController,
                 viewModel = pdfViewModel
+            )
+        }
+
+        composable(
+            route = Routes.PHOTO_VIEWER,
+            arguments = listOf(navArgument("itemId") { type = NavType.LongType })
+        ) { backStackEntry ->
+            val itemId = backStackEntry.arguments?.getLong("itemId") ?: 0L
+            val factory = PhotoGroupViewerViewModel.Factory(
+                itemRepository = itemRepository,
+                pageRepository = pageRepository,
+                itemId = itemId
+            )
+            val photoViewModel: PhotoGroupViewerViewModel = viewModel(factory = factory)
+            PhotoGroupViewerScreen(
+                navController = navController,
+                viewModel = photoViewModel
             )
         }
     }
