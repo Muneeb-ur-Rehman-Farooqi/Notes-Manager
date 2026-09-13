@@ -1,6 +1,9 @@
 package com.muneeb.coursemanager.ui.screens
 
+import android.content.ActivityNotFoundException
+import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -145,7 +148,7 @@ fun ItemListScreen(
             try {
                 context.contentResolver.takePersistableUriPermission(
                     uri,
-                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
                 )
             } catch (e: SecurityException) {
                 // ignore
@@ -234,6 +237,30 @@ fun ItemListScreen(
                             onClick = {
                                 viewModel.viewModelScope.launch {
                                     viewModel.updateLastOpened(item.itemId)
+                                }
+                                if (item.itemType == ItemType.FILE) {
+                                    val isPdf = item.mimeType == "application/pdf" ||
+                                            item.displayName.endsWith(".pdf", ignoreCase = true)
+                                    if (isPdf) {
+                                        navController.navigate(Routes.pdfViewer(item.itemId))
+                                    } else if (item.uri != null) {
+                                        val intent = Intent(Intent.ACTION_VIEW).apply {
+                                            setDataAndType(
+                                                Uri.parse(item.uri),
+                                                item.mimeType ?: "*/*"
+                                            )
+                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                        }
+                                        try {
+                                            context.startActivity(intent)
+                                        } catch (e: ActivityNotFoundException) {
+                                            Toast.makeText(
+                                                context,
+                                                "No app found to open this file",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                        }
+                                    }
                                 }
                             }
                         )

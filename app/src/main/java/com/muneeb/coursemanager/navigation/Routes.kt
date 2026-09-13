@@ -27,6 +27,9 @@ object Routes {
     const val STUDY_TASK_LIST = "study_task_list"
     const val STUDY_TASK_EDITOR = "study_task_editor?taskId={taskId}"
 
+    // PDF Viewer
+    const val PDF_VIEWER = "pdf_viewer/{itemId}"
+
     // Helper functions
     fun courseList(semesterId: Long) = "course_list/$semesterId"
     fun categoryList(courseId: Long) = "category_list/$courseId"
@@ -35,4 +38,5 @@ object Routes {
     fun quickNoteEditor(noteId: Long = -1L) = "quick_note_editor?noteId=$noteId"
     fun timetableEditor(entryId: Long = -1L) = "timetable_editor?entryId=$entryId"
     fun studyTaskEditor(taskId: Long = -1L) = "study_task_editor?taskId=$taskId"
+    fun pdfViewer(itemId: Long) = "pdf_viewer/$itemId"
 }

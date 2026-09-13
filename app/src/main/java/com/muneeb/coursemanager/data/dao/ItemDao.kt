@@ -23,6 +23,12 @@ interface ItemDao {
     @Query("SELECT * FROM items WHERE categoryId = :categoryId ORDER BY sortOrder ASC")
     fun getItemsForCategory(categoryId: Long): Flow<List<Item>>
 
+    @Query("SELECT * FROM items WHERE itemId = :itemId LIMIT 1")
+    fun getItemById(itemId: Long): Flow<Item?>
+
     @Query("UPDATE items SET lastOpenedAt = :timestamp WHERE itemId = :itemId")
     suspend fun updateLastOpened(itemId: Long, timestamp: Long)
+
+    @Query("UPDATE items SET lastReadPage = :page WHERE itemId = :itemId")
+    suspend fun updateLastReadPage(itemId: Long, page: Int)
 }

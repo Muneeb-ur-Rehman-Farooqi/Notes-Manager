@@ -41,6 +41,8 @@ import com.muneeb.coursemanager.ui.screens.NoteEditorScreen
 import com.muneeb.coursemanager.ui.screens.NoteEditorViewModel
 import com.muneeb.coursemanager.ui.screens.NotesListScreen
 import com.muneeb.coursemanager.ui.screens.NotesListViewModel
+import com.muneeb.coursemanager.ui.screens.PdfViewerScreen
+import com.muneeb.coursemanager.ui.screens.PdfViewerViewModel
 import com.muneeb.coursemanager.ui.screens.QuickNoteEditorScreen
 import com.muneeb.coursemanager.ui.screens.QuickNoteEditorViewModel
 import com.muneeb.coursemanager.ui.screens.SemesterListScreen
@@ -61,6 +63,7 @@ fun AppNavHost(
     viewModel: OnboardingViewModel,
     startDestination: String,
     onMenuClick: () -> Unit,
+    isDarkMode: Boolean,
     semesterRepository: SemesterRepository,
     courseRepository: CourseRepository,
     categoryRepository: CategoryRepository,
@@ -80,7 +83,6 @@ fun AppNavHost(
         startDestination = startDestination,
         modifier = modifier
     ) {
-        // Onboarding screens
         composable(Routes.EDUCATION_LEVEL) {
             EducationLevelScreen(navController = navController, viewModel = viewModel)
         }
@@ -97,7 +99,6 @@ fun AppNavHost(
             FreeTextElectiveScreen(navController = navController, viewModel = viewModel)
         }
 
-        // Top-level destinations with menu
         composable(Routes.SEMESTER_LIST) {
             val factory = SemesterListViewModel.Factory(semesterRepository, userPreferences)
             val listViewModel: SemesterListViewModel = viewModel(factory = factory)
@@ -119,7 +120,6 @@ fun AppNavHost(
             StudyTaskListScreen(navController = navController, viewModel = studyTaskViewModel, onMenuClick = onMenuClick)
         }
 
-        // Course List - now with menu
         composable(
             route = Routes.COURSE_LIST,
             arguments = listOf(navArgument("semesterId") { type = NavType.LongType })
@@ -131,8 +131,6 @@ fun AppNavHost(
             val listViewModel: CourseListViewModel = viewModel(factory = factory)
             CourseListScreen(navController = navController, viewModel = listViewModel, onMenuClick = onMenuClick)
         }
-
-        // Category List - now with menu
         composable(
             route = Routes.CATEGORY_LIST,
             arguments = listOf(navArgument("courseId") { type = NavType.LongType })
@@ -142,8 +140,6 @@ fun AppNavHost(
             val listViewModel: CategoryListViewModel = viewModel(factory = factory)
             CategoryListScreen(navController = navController, viewModel = listViewModel, onMenuClick = onMenuClick)
         }
-
-        // Item List - now with menu
         composable(
             route = Routes.ITEM_LIST,
             arguments = listOf(navArgument("categoryId") { type = NavType.LongType })
@@ -154,7 +150,6 @@ fun AppNavHost(
             ItemListScreen(navController = navController, viewModel = listViewModel, onMenuClick = onMenuClick)
         }
 
-        // Editors - no menu
         composable(
             route = Routes.NOTE_EDITOR,
             arguments = listOf(navArgument("categoryId") { type = NavType.LongType })
@@ -191,9 +186,26 @@ fun AppNavHost(
             val editorViewModel: StudyTaskEditorViewModel = viewModel(factory = factory)
             StudyTaskEditorScreen(navController = navController, viewModel = editorViewModel)
         }
+
+        composable(
+            route = Routes.PDF_VIEWER,
+            arguments = listOf(navArgument("itemId") { type = NavType.LongType })
+        ) { backStackEntry ->
+            val itemId = backStackEntry.arguments?.getLong("itemId") ?: 0L
+            val factory = PdfViewerViewModel.Factory(
+                app = application,
+                itemRepository = itemRepository,
+                itemId = itemId,
+                initialDarkMode = isDarkMode
+            )
+            val pdfViewModel: PdfViewerViewModel = viewModel(factory = factory)
+            PdfViewerScreen(
+                navController = navController,
+                viewModel = pdfViewModel
+            )
+        }
     }
 
-    // Post-onboarding navigation
     val uiState by viewModel.uiState.collectAsState()
     var pendingNavigation by remember { mutableStateOf(false) }
 

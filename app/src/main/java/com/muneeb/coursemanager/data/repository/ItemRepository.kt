@@ -10,6 +10,8 @@ class ItemRepository(
     fun getItemsForCategory(categoryId: Long): Flow<List<Item>> =
         itemDao.getItemsForCategory(categoryId)
 
+    fun getItemById(itemId: Long): Flow<Item?> = itemDao.getItemById(itemId)
+
     suspend fun insert(item: Item): Long = itemDao.insert(item)
 
     suspend fun update(item: Item) = itemDao.update(item)
@@ -18,4 +20,7 @@ class ItemRepository(
 
     suspend fun updateLastOpened(itemId: Long, timestamp: Long) =
         itemDao.updateLastOpened(itemId, timestamp)
+
+    suspend fun updateLastReadPage(itemId: Long, page: Int) =
+        itemDao.updateLastReadPage(itemId, page)
 }

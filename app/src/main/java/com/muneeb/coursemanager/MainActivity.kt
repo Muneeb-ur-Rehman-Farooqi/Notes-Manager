@@ -22,6 +22,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.muneeb.coursemanager.data.database.AppDatabase
 import com.muneeb.coursemanager.data.preferences.UserPreferences
@@ -83,6 +84,7 @@ class MainActivity : ComponentActivity() {
 
                     AppContent(
                         userPreferences = userPreferences,
+                        isDarkMode = isDarkMode,
                         semesterRepository = semesterRepository,
                         courseRepository = courseRepository,
                         categoryRepository = categoryRepository,
@@ -101,6 +103,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun AppContent(
     userPreferences: UserPreferences,
+    isDarkMode: Boolean,
     semesterRepository: SemesterRepository,
     courseRepository: CourseRepository,
     categoryRepository: CategoryRepository,
@@ -143,11 +146,14 @@ fun AppContent(
     val navController = rememberNavController()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
-    val isDarkMode by userPreferences.isDarkMode.collectAsState(initial = false)
     val educationLevel by userPreferences.selectedEducationLevel.collectAsState(initial = null)
+
+    val currentBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = currentBackStackEntry?.destination?.route
 
     ModalNavigationDrawer(
         drawerState = drawerState,
+        gesturesEnabled = currentRoute != Routes.PDF_VIEWER,
         drawerContent = {
             AppDrawerContent(
                 navController = navController,
@@ -182,6 +188,7 @@ fun AppContent(
                     drawerState.open()
                 }
             },
+            isDarkMode = isDarkMode,
             semesterRepository = semesterRepository,
             courseRepository = courseRepository,
             categoryRepository = categoryRepository,

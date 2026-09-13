@@ -29,5 +29,6 @@ data class Item(
     val noteText: String? = null,
     val sortOrder: Int = 0,
     val dateAdded: Long = System.currentTimeMillis(),
-    val lastOpenedAt: Long? = null
+    val lastOpenedAt: Long? = null,
+    val lastReadPage: Int = 0
 )
