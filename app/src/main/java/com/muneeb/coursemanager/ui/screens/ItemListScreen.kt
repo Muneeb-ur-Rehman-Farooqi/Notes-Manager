@@ -6,36 +6,49 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -62,6 +75,25 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+private sealed class NameDialogMode {
+    data class RenameExisting(val item: Item) : NameDialogMode()
+    data class ConfirmNewFile(
+        val uri: Uri,
+        val size: Long?,
+        val mimeType: String?,
+        val defaultName: String
+    ) : NameDialogMode()
+    data class ConfirmNewPhotoGroup(
+        val uris: List<Uri>,
+        val defaultName: String
+    ) : NameDialogMode()
+}
+
+private fun stripKnownExtension(name: String): String {
+    val lastDot = name.lastIndexOf('.')
+    return if (lastDot > 0 && lastDot < name.length - 1) name.substring(0, lastDot) else name
+}
 
 data class ItemListUiState(
     val items: List<Item> = emptyList(),
@@ -114,12 +146,9 @@ class ItemListViewModel(
         }
     }
 
-    suspend fun addPhotoGroup(uris: List<Uri>) {
+    suspend fun addPhotoGroup(uris: List<Uri>, displayName: String) {
         if (uris.isEmpty()) return
         try {
-            val dateStr = SimpleDateFormat("dd MMM yyyy HH:mm", Locale.getDefault())
-                .format(Date())
-            val displayName = "Photos - $dateStr"
             val item = Item(
                 categoryId = categoryId,
                 itemType = ItemType.PHOTO_GROUP,
@@ -139,6 +168,22 @@ class ItemListViewModel(
             loadData()
         } catch (e: Exception) {
             _uiState.update { it.copy(error = "Failed to add photos: ${e.message}") }
+        }
+    }
+
+    suspend fun renameItem(item: Item, newName: String) {
+        try {
+            itemRepository.update(item.copy(displayName = newName))
+        } catch (e: Exception) {
+            _uiState.update { it.copy(error = "Failed to rename item: ${e.message}") }
+        }
+    }
+
+    suspend fun deleteItems(items: List<Item>) {
+        try {
+            items.forEach { itemRepository.delete(it) }
+        } catch (e: Exception) {
+            _uiState.update { it.copy(error = "Failed to delete items: ${e.message}") }
         }
     }
 
@@ -172,7 +217,12 @@ fun ItemListScreen(
     onMenuClick: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    var showMenu by remember { mutableStateOf(false) }
+    var selectedItemIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
+    val isSelectionMode = selectedItemIds.isNotEmpty()
+    var showAddSheet by remember { mutableStateOf(false) }
+    var nameDialogMode by remember { mutableStateOf<NameDialogMode?>(null) }
+    var nameDialogText by remember { mutableStateOf("") }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
     val filePickerLauncher = rememberLauncherForActivityResult(
@@ -187,26 +237,27 @@ fun ItemListScreen(
             } catch (e: SecurityException) {
                 // ignore
             }
+            var displayName: String? = null
+            var size: Long? = null
             val cursor = context.contentResolver.query(uri, null, null, null, null)
             cursor?.use {
                 if (it.moveToFirst()) {
-                    val displayName = it.getString(it.getColumnIndexOrThrow(android.provider.OpenableColumns.DISPLAY_NAME))
-                    val size = it.getLong(it.getColumnIndexOrThrow(android.provider.OpenableColumns.SIZE))
-                    val mimeType = context.contentResolver.getType(uri)
-                    viewModel.viewModelScope.launch {
-                        val item = Item(
-                            categoryId = viewModel.categoryId,
-                            itemType = ItemType.FILE,
-                            displayName = displayName ?: uri.lastPathSegment ?: "File",
-                            uri = uri.toString(),
-                            mimeType = mimeType,
-                            sizeBytes = if (size > 0) size else null,
-                            sortOrder = uiState.items.size
-                        )
-                        viewModel.addItem(item)
-                    }
+                    displayName = it.getString(it.getColumnIndexOrThrow(android.provider.OpenableColumns.DISPLAY_NAME))
+                    val rawSize = it.getLong(it.getColumnIndexOrThrow(android.provider.OpenableColumns.SIZE))
+                    size = if (rawSize > 0) rawSize else null
                 }
             }
+            val mimeType = context.contentResolver.getType(uri)
+            val defaultName = stripKnownExtension(
+                displayName ?: uri.lastPathSegment ?: "File"
+            )
+            nameDialogMode = NameDialogMode.ConfirmNewFile(
+                uri = uri,
+                size = size,
+                mimeType = mimeType,
+                defaultName = defaultName
+            )
+            nameDialogText = defaultName
         }
     }
 
@@ -224,9 +275,14 @@ fun ItemListScreen(
                     // ignore
                 }
             }
-            viewModel.viewModelScope.launch {
-                viewModel.addPhotoGroup(uris)
-            }
+            val defaultName = "Photos - " + SimpleDateFormat(
+                "dd MMM yyyy HH:mm", Locale.getDefault()
+            ).format(Date())
+            nameDialogMode = NameDialogMode.ConfirmNewPhotoGroup(
+                uris = uris,
+                defaultName = defaultName
+            )
+            nameDialogText = defaultName
         }
     }
 
@@ -234,18 +290,47 @@ fun ItemListScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(titleText) },
-                navigationIcon = {
-                    IconButton(onClick = onMenuClick) {
-                        Icon(Icons.Default.Menu, contentDescription = "Menu")
+            if (isSelectionMode) {
+                TopAppBar(
+                    title = { Text("${selectedItemIds.size} selected") },
+                    navigationIcon = {
+                        IconButton(onClick = { selectedItemIds = emptySet() }) {
+                            Icon(Icons.Default.Close, contentDescription = "Exit selection")
+                        }
+                    },
+                    actions = {
+                        val singleSelected = if (selectedItemIds.size == 1) {
+                            uiState.items.firstOrNull { it.itemId == selectedItemIds.first() }
+                        } else null
+                        if (singleSelected != null) {
+                            IconButton(
+                                onClick = {
+                                    nameDialogMode = NameDialogMode.RenameExisting(singleSelected)
+                                    nameDialogText = stripKnownExtension(singleSelected.displayName)
+                                }
+                            ) {
+                                Icon(Icons.Default.Edit, contentDescription = "Rename")
+                            }
+                        }
+                        IconButton(onClick = { showDeleteConfirm = true }) {
+                            Icon(Icons.Default.Delete, contentDescription = "Delete")
+                        }
                     }
-                }
-            )
+                )
+            } else {
+                TopAppBar(
+                    title = { Text(titleText) },
+                    navigationIcon = {
+                        IconButton(onClick = onMenuClick) {
+                            Icon(Icons.Default.Menu, contentDescription = "Menu")
+                        }
+                    }
+                )
+            }
         },
         floatingActionButton = {
             ExtendedFloatingActionButton(
-                onClick = { showMenu = true },
+                onClick = { showAddSheet = true },
                 icon = { Icon(Icons.Default.Add, contentDescription = null) },
                 text = { Text("Add Files") }
             )
@@ -288,6 +373,8 @@ fun ItemListScreen(
                     items(uiState.items) { item ->
                         ItemRow(
                             item = item,
+                            isSelectionMode = isSelectionMode,
+                            isSelected = selectedItemIds.contains(item.itemId),
                             onClick = {
                                 viewModel.viewModelScope.launch {
                                     viewModel.updateLastOpened(item.itemId)
@@ -322,87 +409,233 @@ fun ItemListScreen(
                                     }
                                     else -> { /* NOTE handled elsewhere */ }
                                 }
+                            },
+                            onToggleSelect = {
+                                selectedItemIds = if (selectedItemIds.contains(item.itemId)) {
+                                    selectedItemIds - item.itemId
+                                } else {
+                                    selectedItemIds + item.itemId
+                                }
+                            },
+                            onEnterSelectionMode = {
+                                selectedItemIds = setOf(item.itemId)
                             }
                         )
                     }
                 }
             }
         }
+    }
 
-        DropdownMenu(
-            expanded = showMenu,
-            onDismissRequest = { showMenu = false }
+    if (showAddSheet) {
+        val sheetState = rememberModalBottomSheetState()
+        val scope = rememberCoroutineScope()
+        ModalBottomSheet(
+            onDismissRequest = { showAddSheet = false },
+            sheetState = sheetState,
+            dragHandle = {
+                IconButton(onClick = {
+                    scope.launch { sheetState.hide() }.invokeOnCompletion {
+                        if (!sheetState.isVisible) showAddSheet = false
+                    }
+                }) {
+                    Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Close")
+                }
+            }
         ) {
-            DropdownMenuItem(
-                text = { Text("Import File") },
-                onClick = {
-                    showMenu = false
-                    filePickerLauncher.launch(arrayOf("*/*"))
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            scope.launch { sheetState.hide() }.invokeOnCompletion {
+                                if (!sheetState.isVisible) {
+                                    showAddSheet = false
+                                    filePickerLauncher.launch(arrayOf("*/*"))
+                                }
+                            }
+                        }
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null)
+                    Spacer(modifier = Modifier.padding(start = 12.dp))
+                    Text("Import File")
                 }
-            )
-            DropdownMenuItem(
-                text = { Text("Add Photos") },
-                onClick = {
-                    showMenu = false
-                    photoPickerLauncher.launch(arrayOf("image/*"))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            scope.launch { sheetState.hide() }.invokeOnCompletion {
+                                if (!sheetState.isVisible) {
+                                    showAddSheet = false
+                                    photoPickerLauncher.launch(arrayOf("image/*"))
+                                }
+                            }
+                        }
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null)
+                    Spacer(modifier = Modifier.padding(start = 12.dp))
+                    Text("Add Photos")
                 }
-            )
-            DropdownMenuItem(
-                text = { Text("Write Note") },
-                onClick = {
-                    showMenu = false
-                    navController.navigate(Routes.noteEditor(viewModel.categoryId))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            scope.launch { sheetState.hide() }.invokeOnCompletion {
+                                if (!sheetState.isVisible) {
+                                    showAddSheet = false
+                                    navController.navigate(Routes.noteEditor(viewModel.categoryId))
+                                }
+                            }
+                        }
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.Edit, contentDescription = null)
+                    Spacer(modifier = Modifier.padding(start = 12.dp))
+                    Text("Write Note")
                 }
-            )
+                Spacer(modifier = Modifier.height(24.dp))
+            }
         }
+    }
+
+    val currentDialogMode = nameDialogMode
+    if (currentDialogMode != null) {
+        val dialogTitle = when (currentDialogMode) {
+            is NameDialogMode.RenameExisting -> "Rename"
+            is NameDialogMode.ConfirmNewFile -> "Name this file"
+            is NameDialogMode.ConfirmNewPhotoGroup -> "Name this photo set"
+        }
+        AlertDialog(
+            onDismissRequest = { nameDialogMode = null },
+            title = { Text(dialogTitle) },
+            text = {
+                OutlinedTextField(
+                    value = nameDialogText,
+                    onValueChange = { nameDialogText = it },
+                    label = { Text("Name") },
+                    singleLine = true
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = nameDialogText.isNotBlank(),
+                    onClick = {
+                        when (currentDialogMode) {
+                            is NameDialogMode.RenameExisting -> {
+                                viewModel.viewModelScope.launch {
+                                    viewModel.renameItem(
+                                        currentDialogMode.item,
+                                        nameDialogText.trim()
+                                    )
+                                    nameDialogMode = null
+                                }
+                            }
+                            is NameDialogMode.ConfirmNewFile -> {
+                                val newItem = Item(
+                                    categoryId = viewModel.categoryId,
+                                    itemType = ItemType.FILE,
+                                    displayName = nameDialogText.trim(),
+                                    uri = currentDialogMode.uri.toString(),
+                                    mimeType = currentDialogMode.mimeType,
+                                    sizeBytes = currentDialogMode.size,
+                                    sortOrder = uiState.items.size
+                                )
+                                viewModel.viewModelScope.launch {
+                                    viewModel.addItem(newItem)
+                                    nameDialogMode = null
+                                }
+                            }
+                            is NameDialogMode.ConfirmNewPhotoGroup -> {
+                                viewModel.viewModelScope.launch {
+                                    viewModel.addPhotoGroup(
+                                        currentDialogMode.uris,
+                                        nameDialogText.trim()
+                                    )
+                                    nameDialogMode = null
+                                }
+                            }
+                        }
+                    }
+                ) {
+                    Text("Confirm")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { nameDialogMode = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("Delete") },
+            text = { Text("Are you sure you want to delete ${selectedItemIds.size} item(s)?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val toDelete = uiState.items.filter { selectedItemIds.contains(it.itemId) }
+                        viewModel.viewModelScope.launch {
+                            viewModel.deleteItems(toDelete)
+                            selectedItemIds = emptySet()
+                            showDeleteConfirm = false
+                        }
+                    }
+                ) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }
 
 @Composable
-private fun ItemRow(item: Item, onClick: () -> Unit) {
+private fun ItemRow(
+    item: Item,
+    isSelectionMode: Boolean,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    onToggleSelect: () -> Unit,
+    onEnterSelectionMode: () -> Unit
+) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(4.dp),
-        onClick = onClick
+            .padding(4.dp)
+            .combinedClickable(
+                onClick = { if (isSelectionMode) onToggleSelect() else onClick() },
+                onLongClick = { if (!isSelectionMode) onEnterSelectionMode() }
+            )
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
-                Text(
-                    text = item.displayName,
-                    style = MaterialTheme.typography.bodyLarge
-                )
-                Text(
-                    text = item.itemType.name + " · " + formatDate(item.dateAdded),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.Gray
+            if (isSelectionMode) {
+                Checkbox(
+                    checked = isSelected,
+                    onCheckedChange = null,
+                    modifier = Modifier.padding(end = 8.dp)
                 )
             }
-            if (item.itemType == ItemType.FILE) {
-                Text(
-                    text = formatFileSize(item.sizeBytes ?: 0L),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.Gray
-                )
-            }
+            Text(
+                text = stripKnownExtension(item.displayName),
+                style = MaterialTheme.typography.bodyLarge
+            )
         }
-    }
-}
-
-private fun formatDate(timestamp: Long): String {
-    val sdf = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
-    return sdf.format(Date(timestamp))
-}
-
-private fun formatFileSize(bytes: Long): String {
-    return when {
-        bytes < 1024 -> "$bytes B"
-        bytes < 1024 * 1024 -> String.format("%.1f KB", bytes / 1024.0)
-        else -> String.format("%.1f MB", bytes / (1024.0 * 1024.0))
     }
 }

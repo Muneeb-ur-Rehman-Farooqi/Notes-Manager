@@ -2,6 +2,7 @@ package com.muneeb.coursemanager
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
@@ -156,9 +157,16 @@ fun AppContent(
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = currentBackStackEntry?.destination?.route
 
+    BackHandler(enabled = drawerState.isOpen) {
+        scope.launch {
+            drawerState.close()
+        }
+    }
+
     ModalNavigationDrawer(
         drawerState = drawerState,
-        gesturesEnabled = currentRoute != Routes.PDF_VIEWER,
+        gesturesEnabled = currentRoute != Routes.PDF_VIEWER &&
+                currentRoute != Routes.ITEM_LIST,
         drawerContent = {
             AppDrawerContent(
                 navController = navController,
@@ -190,7 +198,7 @@ fun AppContent(
             startDestination = startDestination!!,
             onMenuClick = {
                 scope.launch {
-                    drawerState.open()
+                    if (drawerState.isOpen) drawerState.close() else drawerState.open()
                 }
             },
             isDarkMode = isDarkMode,

@@ -9,7 +9,9 @@
         android:allowBackup="true"
         android:label="Notes Manager"
         android:supportsRtl="true"
-        android:theme="@style/Theme.NotesManager">
+        android:theme="@style/Theme.NotesManager"
+        android:icon="@mipmap/ic_launcher">
+        
 
         <activity
             android:name=".MainActivity"

@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace = "com.muneeb.coursemanager"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.muneeb.coursemanager"
@@ -29,7 +29,7 @@ android {
 dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.activity:activity-compose:1.9.0")
-    implementation(platform("androidx.compose:compose-bom:2024.06.00"))
+    implementation(platform("androidx.compose:compose-bom:2026.08.00"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.room:room-runtime:2.7.1")
@@ -41,4 +41,5 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.10.0")
     implementation("io.github.oothp:android-pdf-viewer:3.2.0-beta06")
     implementation("io.coil-kt.coil3:coil-compose:3.5.0")
+    implementation("androidx.compose.material:material-icons-core")
 }
