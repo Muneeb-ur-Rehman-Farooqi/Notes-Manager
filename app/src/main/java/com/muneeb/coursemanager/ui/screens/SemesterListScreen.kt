@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
@@ -37,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
@@ -58,7 +60,8 @@ data class SemesterListUiState(
     val semesters: List<Semester> = emptyList(),
     val isLoading: Boolean = true,
     val error: String? = null,
-    val showMandatoryDialog: Boolean = false
+    val showMandatoryDialog: Boolean = false,
+    val isDarkMode: Boolean = false
 )
 
 class SemesterListViewModel(
@@ -74,7 +77,11 @@ class SemesterListViewModel(
 
     private fun loadData() {
         viewModelScope.launch {
-            semesterRepository.getAllSemesters().combine(userPreferences.selectedEducationLevel) { semesters, level ->
+            combine(
+                semesterRepository.getAllSemesters(),
+                userPreferences.selectedEducationLevel,
+                userPreferences.isDarkMode
+            ) { semesters, level, isDark ->
                 val isUniversity = level == "UNIVERSITY"
                 val showDialog = isUniversity && semesters.isEmpty()
                 _uiState.update { state ->
@@ -82,7 +89,8 @@ class SemesterListViewModel(
                         semesters = semesters,
                         isLoading = false,
                         error = null,
-                        showMandatoryDialog = showDialog
+                        showMandatoryDialog = showDialog,
+                        isDarkMode = isDark
                     )
                 }
             }.collect { /* handled in combine */ }
@@ -219,6 +227,7 @@ fun SemesterListScreen(
                                 .height(200.dp)
                                 .padding(4.dp),
                             shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(),
                             onClick = {
                                 navController.navigate(Routes.courseList(semester.semesterId))
                             }
@@ -230,7 +239,8 @@ fun SemesterListScreen(
                                 Text(
                                     text = semester.name,
                                     style = MaterialTheme.typography.headlineMedium,
-                                    color = Color(0xFF222222)
+                                    color = if (uiState.isDarkMode) Color.White else Color(0xFF222222),
+                                    fontWeight = if (uiState.isDarkMode) FontWeight.Bold else FontWeight.Normal
                                 )
                             }
                         }

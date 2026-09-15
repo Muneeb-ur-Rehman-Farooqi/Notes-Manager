@@ -157,16 +157,9 @@ fun AppContent(
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = currentBackStackEntry?.destination?.route
 
-    BackHandler(enabled = drawerState.isOpen) {
-        scope.launch {
-            drawerState.close()
-        }
-    }
-
     ModalNavigationDrawer(
         drawerState = drawerState,
-        gesturesEnabled = currentRoute != Routes.PDF_VIEWER &&
-                currentRoute != Routes.ITEM_LIST,
+        gesturesEnabled = currentRoute != Routes.PDF_VIEWER,
         drawerContent = {
             AppDrawerContent(
                 navController = navController,
@@ -213,5 +206,11 @@ fun AppContent(
             studyTaskRepository = studyTaskRepository,
             userPreferences = userPreferences
         )
+    }
+
+    BackHandler(enabled = drawerState.isOpen) {
+        scope.launch {
+            drawerState.close()
+        }
     }
 }

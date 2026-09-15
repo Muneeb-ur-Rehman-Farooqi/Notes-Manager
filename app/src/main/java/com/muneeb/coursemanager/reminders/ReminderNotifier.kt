@@ -3,6 +3,7 @@ package com.muneeb.coursemanager.reminders
 import android.content.Context
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import com.muneeb.coursemanager.R
 
 object ReminderNotifier {
     fun showNotification(
@@ -13,7 +14,7 @@ object ReminderNotifier {
         body: String
     ) {
         val builder = NotificationCompat.Builder(context, channelId)
-            .setSmallIcon(android.R.drawable.ic_popup_reminder)
+            .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(title)
             .setContentText(body)
             .setPriority(NotificationCompat.PRIORITY_HIGH)

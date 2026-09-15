@@ -1,10 +1,15 @@
 package com.muneeb.coursemanager.ui.components
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.Switch
@@ -32,11 +37,24 @@ fun AppDrawerContent(
                 .fillMaxWidth()
                 .padding(vertical = 16.dp)
         ) {
-            Text(
-                text = "Course Manager",
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                style = androidx.compose.material3.MaterialTheme.typography.titleLarge
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "Course Manager",
+                    style = androidx.compose.material3.MaterialTheme.typography.titleLarge
+                )
+                IconButton(onClick = onItemClick) {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = "Close menu"
+                    )
+                }
+            }
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
             val semesterLabel = when (educationLevel) {
