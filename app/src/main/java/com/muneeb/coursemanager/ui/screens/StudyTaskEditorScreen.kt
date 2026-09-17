@@ -1,7 +1,6 @@
 package com.muneeb.coursemanager.ui.screens
 
 import android.app.Application
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -16,6 +15,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
@@ -33,19 +33,20 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavController
 import com.muneeb.coursemanager.data.entities.StudyTask
+import com.muneeb.coursemanager.data.preferences.UserPreferences
 import com.muneeb.coursemanager.data.repository.StudyTaskRepository
 import com.muneeb.coursemanager.reminders.NotificationChannels
 import com.muneeb.coursemanager.reminders.ReminderScheduler
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -69,6 +70,9 @@ class StudyTaskEditorViewModel(
     private val studyTaskRepository: StudyTaskRepository,
     private val taskId: Long
 ) : AndroidViewModel(application) {
+
+    private val userPreferences = UserPreferences(application)
+
     private val _uiState = MutableStateFlow(StudyTaskEditorUiState())
     val uiState: StateFlow<StudyTaskEditorUiState> = _uiState.asStateFlow()
 
@@ -110,13 +114,8 @@ class StudyTaskEditorViewModel(
             _uiState.update { it.copy(error = "Title is required") }
             return false
         }
-        if (state.hasReminder && (state.reminderHour == null || state.reminderMinute == null)) {
-            _uiState.update { it.copy(error = "Set a reminder time") }
-            return false
-        }
         _uiState.update { it.copy(isSaving = true, error = null) }
         try {
-            // Cancel old alarm if editing and had reminder
             if (!state.isNewTask) {
                 val oldTask = studyTaskRepository.getById(taskId)
                 if (oldTask?.hasReminder == true) {
@@ -140,6 +139,9 @@ class StudyTaskEditorViewModel(
                 taskId
             }
             if (state.hasReminder) {
+                val name = userPreferences.userName.firstOrNull()
+                val baseBody = "Time to study!"
+                val body = if (name != null) "Hey $name — $baseBody" else baseBody
                 val triggerMillis = computeTriggerMillis(state.dateMillis, state.reminderHour, state.reminderMinute)
                 ReminderScheduler.scheduleExactReminder(
                     context = application,
@@ -147,7 +149,7 @@ class StudyTaskEditorViewModel(
                     triggerAtMillis = triggerMillis,
                     channelId = NotificationChannels.CHANNEL_STUDY_REMINDERS,
                     title = state.title,
-                    body = "Time to study!",
+                    body = body,
                     isWeeklyRecurring = false
                 )
             }
@@ -300,7 +302,7 @@ fun StudyTaskEditorScreen(
                 if (uiState.error != null) {
                     Text(
                         text = "Error: ${uiState.error}",
-                        color = Color.Red,
+                        color = MaterialTheme.colorScheme.error,
                         modifier = Modifier.padding(bottom = 8.dp)
                     )
                 }

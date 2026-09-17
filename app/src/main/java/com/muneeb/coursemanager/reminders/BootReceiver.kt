@@ -3,18 +3,22 @@ package com.muneeb.coursemanager.reminders
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import com.muneeb.coursemanager.data.database.AppDatabase
+import com.muneeb.coursemanager.data.preferences.UserPreferences
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
-import com.muneeb.coursemanager.data.database.AppDatabase
 
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action != android.content.Intent.ACTION_BOOT_COMPLETED) return
+        if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
 
         val pendingResult = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
+                val userPreferences = UserPreferences(context)
+                val userName = userPreferences.userName.firstOrNull()
                 val dao = AppDatabase.getInstance(context).timetableDao()
                 val entries = dao.getAllOnce()
                 entries.forEach { entry ->
@@ -25,7 +29,7 @@ class BootReceiver : BroadcastReceiver() {
                         minutesBefore = 5
                     )
                     val title = entry.subjectName
-                    val body = buildString {
+                    val baseBody = buildString {
                         if (entry.room != null && entry.teacher != null) {
                             append("${entry.room} · ${entry.teacher}")
                         } else if (entry.room != null) {
@@ -36,6 +40,7 @@ class BootReceiver : BroadcastReceiver() {
                             append("Class starting soon")
                         }
                     }
+                    val body = if (userName != null) "Hey $userName, $baseBody" else baseBody
                     ReminderScheduler.scheduleExactReminder(
                         context = context,
                         requestCode = entry.entryId.toInt(),
@@ -47,7 +52,7 @@ class BootReceiver : BroadcastReceiver() {
                     )
                 }
             } catch (_: Exception) {
-                // Log error
+                // swallow — boot rescheduling is best-effort
             } finally {
                 pendingResult.finish()
             }

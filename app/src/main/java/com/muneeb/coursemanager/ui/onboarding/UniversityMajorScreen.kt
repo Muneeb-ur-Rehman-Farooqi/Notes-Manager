@@ -1,6 +1,5 @@
 package com.muneeb.coursemanager.ui.onboarding
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -25,33 +24,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.navigation.NavController
-import com.muneeb.coursemanager.data.SubjectTemplates
 
 @Composable
-fun FreeTextElectiveScreen(
-    navController: NavController,
+fun UniversityMajorScreen(
     viewModel: OnboardingViewModel
 ) {
-    BackHandler(enabled = true) { }
-
     val uiState by viewModel.uiState.collectAsState()
-    val level = uiState.selectedEducationLevel
-    val group = uiState.selectedGroup
-
-    if (level == null || group == null) {
-        navController.popBackStack()
-        return
-    }
-
-    val slotInfo = SubjectTemplates.getFreeTextSlotInfo(level, group)
-    if (slotInfo == null) {
-        navController.popBackStack()
-        return
-    }
-
-    val (slotCount, fixedSubjects) = slotInfo
-    var userTexts by remember { mutableStateOf(List(slotCount) { "" }) }
+    var major by remember { mutableStateOf(uiState.selectedUniversityMajor ?: "") }
 
     Column(
         modifier = Modifier
@@ -63,59 +42,39 @@ fun FreeTextElectiveScreen(
         verticalArrangement = Arrangement.Center
     ) {
         Text(
-            text = "Enter elective subjects",
+            text = "What's your degree / major?",
             style = MaterialTheme.typography.headlineSmall,
             color = MaterialTheme.colorScheme.onBackground
         )
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
-        if (fixedSubjects.isNotEmpty()) {
-            Text(
-                text = "Fixed subjects: ${fixedSubjects.joinToString(", ")}",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-        }
-
-        Text(
-            text = "Enter $slotCount additional subject name(s)",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+        OutlinedTextField(
+            value = major,
+            onValueChange = { major = it },
+            label = { Text("Your degree / major (e.g. BSCS, BSAI, BSSE)") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
         )
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        userTexts.indices.forEach { index ->
-            OutlinedTextField(
-                value = userTexts[index],
-                onValueChange = { newValue ->
-                    userTexts = userTexts.toMutableList().apply { set(index, newValue) }
-                },
-                label = { Text("Subject ${index + 1}") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        val allFilled = userTexts.all { it.isNotBlank() }
         Button(
             onClick = {
-                viewModel.setFreeTextElectives(userTexts)
-                viewModel.completeOnboarding()
+                val trimmed = major.trim()
+                if (trimmed.isNotBlank()) {
+                    viewModel.setUniversityMajor(trimmed)
+                    viewModel.completeOnboarding()
+                }
             },
-            enabled = allFilled,
+            enabled = major.isNotBlank(),
             colors = ButtonDefaults.buttonColors(
                 containerColor = MaterialTheme.colorScheme.secondaryContainer,
                 contentColor = MaterialTheme.colorScheme.onSecondaryContainer
             ),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Continue")
+            Text("Continue", style = MaterialTheme.typography.bodyLarge)
         }
     }
 }

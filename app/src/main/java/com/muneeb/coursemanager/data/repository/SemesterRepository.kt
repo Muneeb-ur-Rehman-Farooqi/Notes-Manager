@@ -7,7 +7,8 @@ import kotlinx.coroutines.flow.Flow
 class SemesterRepository(
     private val semesterDao: SemesterDao
 ) {
-    fun getAllSemesters(): Flow<List<Semester>> = semesterDao.getAllSemesters()
+    fun getUniversitySemesters(): Flow<List<Semester>> =
+        semesterDao.getUniversitySemesters()
 
     fun getSemesterById(semesterId: Long): Flow<Semester?> =
         semesterDao.getSemesterById(semesterId)

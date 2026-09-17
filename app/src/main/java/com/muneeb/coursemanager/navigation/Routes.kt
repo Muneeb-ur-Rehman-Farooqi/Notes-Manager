@@ -2,11 +2,13 @@ package com.muneeb.coursemanager.navigation
 
 object Routes {
     // Onboarding
+    const val NAME_ENTRY = "name_entry"
     const val EDUCATION_LEVEL = "education_level"
     const val PART_GRADE_SELECTION = "part_grade_selection"
     const val GROUP_SELECTION = "group_selection"
     const val ELECTIVE_CHOICE = "elective_choice"
     const val FREE_TEXT_ELECTIVE = "free_text_elective"
+    const val UNIVERSITY_MAJOR = "university_major"
 
     // Main browsing
     const val SEMESTER_LIST = "semester_list"

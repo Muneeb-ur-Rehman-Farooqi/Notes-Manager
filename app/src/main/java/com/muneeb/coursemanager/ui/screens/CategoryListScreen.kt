@@ -32,7 +32,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -151,7 +150,7 @@ fun CategoryListScreen(
                 Text(
                     text = "Error: ${uiState.error}",
                     modifier = Modifier.padding(16.dp),
-                    color = Color.Red
+                    color = MaterialTheme.colorScheme.error
                 )
             } else {
                 LazyColumn(
@@ -170,6 +169,7 @@ fun CategoryListScreen(
                             Text(
                                 text = category.name,
                                 style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurface,
                                 modifier = Modifier.padding(12.dp)
                             )
                         }

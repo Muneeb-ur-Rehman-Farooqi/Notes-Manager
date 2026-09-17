@@ -1,7 +1,6 @@
 package com.muneeb.coursemanager.data.preferences
 
 import android.content.Context
-import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
@@ -18,8 +17,12 @@ class UserPreferences(context: Context) {
     private companion object {
         val SELECTED_EDUCATION_LEVEL = stringPreferencesKey("selected_education_level")
         val SELECTED_GROUP = stringPreferencesKey("selected_group")
+        val SELECTED_PART_GRADE = stringPreferencesKey("selected_part_grade")
+        val SELECTED_UNIVERSITY_MAJOR = stringPreferencesKey("selected_university_major")
         val SELECTED_SEMESTER_ID = longPreferencesKey("selected_semester_id")
         val IS_DARK_MODE = booleanPreferencesKey("is_dark_mode")
+        val USER_NAME = stringPreferencesKey("user_name")
+        val SELECTED_PALETTE = stringPreferencesKey("selected_palette")
     }
 
     val selectedEducationLevel: Flow<String?> = dataStore.data
@@ -28,11 +31,23 @@ class UserPreferences(context: Context) {
     val selectedGroup: Flow<String?> = dataStore.data
         .map { preferences -> preferences[SELECTED_GROUP] }
 
+    val selectedPartGrade: Flow<String?> = dataStore.data
+        .map { preferences -> preferences[SELECTED_PART_GRADE] }
+
+    val selectedUniversityMajor: Flow<String?> = dataStore.data
+        .map { preferences -> preferences[SELECTED_UNIVERSITY_MAJOR] }
+
     val selectedSemesterId: Flow<Long?> = dataStore.data
         .map { preferences -> preferences[SELECTED_SEMESTER_ID] }
 
-    val isDarkMode: Flow<Boolean> = dataStore.data
-        .map { preferences -> preferences[IS_DARK_MODE] ?: false }
+    val isDarkModeOrNull: Flow<Boolean?> = dataStore.data
+        .map { preferences -> preferences[IS_DARK_MODE] }
+
+    val userName: Flow<String?> = dataStore.data
+        .map { preferences -> preferences[USER_NAME] }
+
+    val selectedPalette: Flow<String> = dataStore.data
+        .map { preferences -> preferences[SELECTED_PALETTE] ?: "MONOCHROME" }
 
     suspend fun setSelectedEducationLevel(level: String?) {
         dataStore.edit { preferences ->
@@ -48,6 +63,20 @@ class UserPreferences(context: Context) {
         }
     }
 
+    suspend fun setSelectedPartGrade(partGrade: String?) {
+        dataStore.edit { preferences ->
+            if (partGrade == null) preferences.remove(SELECTED_PART_GRADE)
+            else preferences[SELECTED_PART_GRADE] = partGrade
+        }
+    }
+
+    suspend fun setSelectedUniversityMajor(major: String?) {
+        dataStore.edit { preferences ->
+            if (major == null) preferences.remove(SELECTED_UNIVERSITY_MAJOR)
+            else preferences[SELECTED_UNIVERSITY_MAJOR] = major
+        }
+    }
+
     suspend fun setSelectedSemesterId(semesterId: Long?) {
         dataStore.edit { preferences ->
             if (semesterId == null) preferences.remove(SELECTED_SEMESTER_ID)
@@ -58,6 +87,18 @@ class UserPreferences(context: Context) {
     suspend fun setDarkMode(enabled: Boolean) {
         dataStore.edit { preferences ->
             preferences[IS_DARK_MODE] = enabled
+        }
+    }
+
+    suspend fun setUserName(name: String) {
+        dataStore.edit { preferences ->
+            preferences[USER_NAME] = name
+        }
+    }
+
+    suspend fun setSelectedPalette(palette: String) {
+        dataStore.edit { preferences ->
+            preferences[SELECTED_PALETTE] = palette
         }
     }
 }

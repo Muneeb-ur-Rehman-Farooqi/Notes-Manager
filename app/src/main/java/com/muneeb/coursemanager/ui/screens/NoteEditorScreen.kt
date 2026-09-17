@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -136,7 +137,10 @@ fun NoteEditorScreen(
                 }
             }
             if (uiState.error != null) {
-                Text(text = "Error: ${uiState.error}", color = androidx.compose.ui.graphics.Color.Red)
+                Text(
+                    text = "Error: ${uiState.error}",
+                    color = MaterialTheme.colorScheme.error
+                )
             }
         }
     }

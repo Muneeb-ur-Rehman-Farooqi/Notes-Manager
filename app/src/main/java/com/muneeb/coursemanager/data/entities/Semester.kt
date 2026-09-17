@@ -10,5 +10,7 @@ data class Semester(
     val name: String,
     val sortOrder: Int = 0,
     val educationLevel: String? = null,
-    val partGrade: String? = null
+    val partGrade: String? = null,
+    val electiveChoice: String? = null,
+    val freeTextElectives: String? = null
 )

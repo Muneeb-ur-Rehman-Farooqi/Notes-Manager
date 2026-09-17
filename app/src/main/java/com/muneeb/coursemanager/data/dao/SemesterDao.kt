@@ -20,8 +20,8 @@ interface SemesterDao {
     @Delete
     suspend fun delete(semester: Semester)
 
-    @Query("SELECT * FROM semesters ORDER BY sortOrder ASC")
-    fun getAllSemesters(): Flow<List<Semester>>
+    @Query("SELECT * FROM semesters WHERE educationLevel = 'UNIVERSITY' ORDER BY sortOrder ASC")
+    fun getUniversitySemesters(): Flow<List<Semester>>
 
     @Query("SELECT * FROM semesters WHERE semesterId = :semesterId")
     fun getSemesterById(semesterId: Long): Flow<Semester?>

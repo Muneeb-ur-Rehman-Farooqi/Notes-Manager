@@ -34,7 +34,7 @@ import com.muneeb.coursemanager.data.entities.TimetableEntry
         TimetableEntry::class,
         StudyTask::class
     ],
-    version = 8,
+    version = 9,
     exportSchema = false
 )
 @TypeConverters(Converters::class)

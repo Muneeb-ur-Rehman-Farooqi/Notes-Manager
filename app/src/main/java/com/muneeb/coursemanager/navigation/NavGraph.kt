@@ -5,9 +5,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -30,8 +27,10 @@ import com.muneeb.coursemanager.ui.onboarding.EducationLevelScreen
 import com.muneeb.coursemanager.ui.onboarding.ElectiveChoiceScreen
 import com.muneeb.coursemanager.ui.onboarding.FreeTextElectiveScreen
 import com.muneeb.coursemanager.ui.onboarding.GroupSelectionScreen
+import com.muneeb.coursemanager.ui.onboarding.NameEntryScreen
 import com.muneeb.coursemanager.ui.onboarding.OnboardingViewModel
 import com.muneeb.coursemanager.ui.onboarding.PartOrGradeSelectionScreen
+import com.muneeb.coursemanager.ui.onboarding.UniversityMajorScreen
 import com.muneeb.coursemanager.ui.screens.CategoryListScreen
 import com.muneeb.coursemanager.ui.screens.CategoryListViewModel
 import com.muneeb.coursemanager.ui.screens.CourseListScreen
@@ -65,6 +64,7 @@ fun AppNavHost(
     navController: NavHostController,
     viewModel: OnboardingViewModel,
     startDestination: String,
+    postNameEntryDestination: String,
     onMenuClick: () -> Unit,
     isDarkMode: Boolean,
     semesterRepository: SemesterRepository,
@@ -87,6 +87,16 @@ fun AppNavHost(
         startDestination = startDestination,
         modifier = modifier
     ) {
+        composable(Routes.NAME_ENTRY) {
+            NameEntryScreen(
+                userPreferences = userPreferences,
+                onContinue = {
+                    navController.navigate(postNameEntryDestination) {
+                        popUpTo(Routes.NAME_ENTRY) { inclusive = true }
+                    }
+                }
+            )
+        }
         composable(Routes.EDUCATION_LEVEL) {
             EducationLevelScreen(navController = navController, viewModel = viewModel)
         }
@@ -101,6 +111,9 @@ fun AppNavHost(
         }
         composable(Routes.FREE_TEXT_ELECTIVE) {
             FreeTextElectiveScreen(navController = navController, viewModel = viewModel)
+        }
+        composable(Routes.UNIVERSITY_MAJOR) {
+            UniversityMajorScreen(viewModel = viewModel)
         }
 
         composable(Routes.SEMESTER_LIST) {
@@ -230,11 +243,9 @@ fun AppNavHost(
     }
 
     val uiState by viewModel.uiState.collectAsState()
-    var pendingNavigation by remember { mutableStateOf(false) }
 
     LaunchedEffect(uiState.isComplete) {
-        if (uiState.isComplete && !pendingNavigation) {
-            pendingNavigation = true
+        if (uiState.isComplete) {
             val level = uiState.selectedEducationLevel
             if (level == "UNIVERSITY") {
                 navController.navigate(Routes.SEMESTER_LIST) {
@@ -243,18 +254,14 @@ fun AppNavHost(
                 }
             } else {
                 val semesterId = userPreferences.selectedSemesterId.firstOrNull()
-                if (semesterId != null) {
-                    navController.navigate(Routes.courseList(semesterId)) {
-                        popUpTo(Routes.EDUCATION_LEVEL) { inclusive = true }
-                        launchSingleTop = true
-                    }
-                } else {
-                    navController.navigate(Routes.SEMESTER_LIST) {
-                        popUpTo(Routes.EDUCATION_LEVEL) { inclusive = true }
-                        launchSingleTop = true
-                    }
+                navController.navigate(
+                    if (semesterId != null) Routes.courseList(semesterId) else Routes.SEMESTER_LIST
+                ) {
+                    popUpTo(Routes.EDUCATION_LEVEL) { inclusive = true }
+                    launchSingleTop = true
                 }
             }
+            viewModel.resetCompletion()
         }
     }
 }

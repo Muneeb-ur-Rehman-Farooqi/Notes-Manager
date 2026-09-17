@@ -52,7 +52,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
@@ -352,7 +351,7 @@ fun ItemListScreen(
                 Text(
                     text = "Error: ${uiState.error}",
                     modifier = Modifier.padding(16.dp),
-                    color = Color.Red
+                    color = MaterialTheme.colorScheme.error
                 )
             } else if (uiState.items.isEmpty()) {
                 Box(
@@ -362,7 +361,7 @@ fun ItemListScreen(
                     Text(
                         text = "Please drop your related files",
                         style = MaterialTheme.typography.bodyLarge,
-                        color = Color.Gray
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             } else {
@@ -634,7 +633,8 @@ private fun ItemRow(
             }
             Text(
                 text = stripKnownExtension(item.displayName),
-                style = MaterialTheme.typography.bodyLarge
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface
             )
         }
     }

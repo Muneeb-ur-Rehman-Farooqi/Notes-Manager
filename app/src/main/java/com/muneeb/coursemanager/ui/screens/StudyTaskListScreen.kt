@@ -36,7 +36,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.AndroidViewModel
@@ -169,7 +168,7 @@ fun StudyTaskListScreen(
                 Text(
                     text = "Error: ${uiState.error}",
                     modifier = Modifier.padding(16.dp),
-                    color = Color.Red
+                    color = MaterialTheme.colorScheme.error
                 )
             } else if (uiState.tasks.isEmpty()) {
                 Box(
@@ -179,7 +178,7 @@ fun StudyTaskListScreen(
                     Text(
                         text = "No study tasks.\nTap + to add one.",
                         style = MaterialTheme.typography.bodyLarge,
-                        color = Color.Gray
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             } else {
@@ -196,7 +195,7 @@ fun StudyTaskListScreen(
                             Text(
                                 text = formatDateHeader(dateMillis),
                                 style = MaterialTheme.typography.titleMedium,
-                                color = Color(0xFF222222),
+                                color = MaterialTheme.colorScheme.onBackground,
                                 modifier = Modifier.padding(vertical = 8.dp)
                             )
                         }
@@ -281,6 +280,7 @@ private fun StudyTaskRow(
                     Text(
                         text = task.title,
                         style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
                         textDecoration = if (task.isCompleted) TextDecoration.LineThrough else null
                     )
                     if (task.hasReminder) {
@@ -288,7 +288,7 @@ private fun StudyTaskRow(
                         Text(
                             text = "⏰ $timeStr",
                             style = MaterialTheme.typography.bodySmall,
-                            color = Color.Gray
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -301,7 +301,6 @@ private fun StudyTaskRow(
 }
 
 private fun formatDateHeader(dateMillis: Long): String {
-    val cal = Calendar.getInstance()
     val today = Calendar.getInstance().apply {
         set(Calendar.HOUR_OF_DAY, 0)
         set(Calendar.MINUTE, 0)

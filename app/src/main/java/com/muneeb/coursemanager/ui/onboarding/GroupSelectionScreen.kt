@@ -22,7 +22,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.muneeb.coursemanager.data.SubjectTemplates
@@ -49,7 +48,7 @@ fun GroupSelectionScreen(
             Text(
                 text = "Loading...",
                 modifier = Modifier.padding(top = 16.dp),
-                color = Color.Gray
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
         return
@@ -61,7 +60,7 @@ fun GroupSelectionScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Text(text = "Error: ${uiState.error}", color = Color.Red)
+            Text(text = "Error: ${uiState.error}", color = MaterialTheme.colorScheme.error)
             Spacer(modifier = Modifier.height(16.dp))
             Button(onClick = { navController.popBackStack() }) {
                 Text("Go Back")
@@ -88,8 +87,8 @@ fun GroupSelectionScreen(
             Button(
                 onClick = { navController.popBackStack() },
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFFE0E0E0),
-                    contentColor = Color(0xFF222222)
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                 ),
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -111,7 +110,7 @@ fun GroupSelectionScreen(
         Text(
             text = "Select your group",
             style = MaterialTheme.typography.headlineSmall,
-            color = Color(0xFF222222)
+            color = MaterialTheme.colorScheme.onBackground
         )
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -119,7 +118,7 @@ fun GroupSelectionScreen(
         Text(
             text = "For $selectedLevel - $selectedPart",
             style = MaterialTheme.typography.bodyMedium,
-            color = Color.Gray
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
         Spacer(modifier = Modifier.height(32.dp))
@@ -147,8 +146,8 @@ fun GroupSelectionScreen(
                     }
                 },
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFFE0E0E0),
-                    contentColor = Color(0xFF222222)
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                 ),
                 modifier = Modifier
                     .padding(horizontal = 16.dp)

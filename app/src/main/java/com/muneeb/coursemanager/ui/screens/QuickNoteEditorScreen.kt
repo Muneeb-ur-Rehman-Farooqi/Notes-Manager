@@ -9,12 +9,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -22,7 +22,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -142,12 +141,6 @@ fun QuickNoteEditorScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
-    LaunchedEffect(uiState.isSaving) {
-        if (uiState.isSaving) {
-            // Wait for save to complete; handled via return from saveNote
-        }
-    }
-
     Scaffold(
         topBar = {
             TopAppBar(
@@ -166,7 +159,7 @@ fun QuickNoteEditorScreen(
             } else if (uiState.error != null && uiState.title.isEmpty() && uiState.content.isEmpty()) {
                 Text(
                     text = "Error: ${uiState.error}",
-                    color = Color.Red
+                    color = MaterialTheme.colorScheme.error
                 )
             } else {
                 OutlinedTextField(
@@ -206,7 +199,7 @@ fun QuickNoteEditorScreen(
                 if (uiState.error != null && uiState.error?.isNotEmpty() == true) {
                     Text(
                         text = "Error: ${uiState.error}",
-                        color = Color.Red,
+                        color = MaterialTheme.colorScheme.error,
                         modifier = Modifier.padding(top = 8.dp)
                     )
                 }

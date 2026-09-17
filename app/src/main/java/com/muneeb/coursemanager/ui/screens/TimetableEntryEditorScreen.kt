@@ -17,6 +17,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -25,7 +26,6 @@ import androidx.compose.material3.TimePicker
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -33,19 +33,20 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavController
 import com.muneeb.coursemanager.data.entities.TimetableEntry
+import com.muneeb.coursemanager.data.preferences.UserPreferences
 import com.muneeb.coursemanager.data.repository.TimetableRepository
 import com.muneeb.coursemanager.reminders.NotificationChannels
 import com.muneeb.coursemanager.reminders.ReminderScheduler
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.Calendar
@@ -71,6 +72,9 @@ class TimetableEditorViewModel(
     private val timetableRepository: TimetableRepository,
     private val entryId: Long
 ) : AndroidViewModel(application) {
+
+    private val userPreferences = UserPreferences(application)
+
     private val _uiState = MutableStateFlow(TimetableEditorUiState())
     val uiState: StateFlow<TimetableEditorUiState> = _uiState.asStateFlow()
 
@@ -190,7 +194,6 @@ class TimetableEditorViewModel(
                     scheduleReminder(newId, entry)
                 }
             } else {
-                // Cancel old alarm first
                 ReminderScheduler.cancelReminder(application, entryId.toInt())
                 val entry = TimetableEntry(
                     entryId = entryId,
@@ -214,8 +217,9 @@ class TimetableEditorViewModel(
         }
     }
 
-    private fun scheduleReminder(entryId: Long, entry: TimetableEntry) {
+    private suspend fun scheduleReminder(entryId: Long, entry: TimetableEntry) {
         val context = application
+        val name = userPreferences.userName.firstOrNull()
         val triggerMillis = ReminderScheduler.computeNextTriggerMillis(
             dayOfWeek = entry.dayOfWeek,
             hour = entry.startHour,
@@ -223,7 +227,7 @@ class TimetableEditorViewModel(
             minutesBefore = 5
         )
         val title = entry.subjectName
-        val body = buildString {
+        val baseBody = buildString {
             if (entry.room != null && entry.teacher != null) {
                 append("${entry.room} · ${entry.teacher}")
             } else if (entry.room != null) {
@@ -234,6 +238,7 @@ class TimetableEditorViewModel(
                 append("Class starting soon")
             }
         }
+        val body = if (name != null) "Hey $name, $baseBody" else baseBody
         ReminderScheduler.scheduleExactReminder(
             context = context,
             requestCode = entryId.toInt(),
@@ -309,7 +314,6 @@ fun TimetableEntryEditorScreen(
             if (uiState.isLoading) {
                 CircularProgressIndicator()
             } else {
-                // Day selection: multi-day checkboxes for new, dropdown for edit
                 val dayNames = listOf(
                     "Monday" to Calendar.MONDAY,
                     "Tuesday" to Calendar.TUESDAY,
@@ -321,7 +325,7 @@ fun TimetableEntryEditorScreen(
                 )
 
                 if (uiState.isNewEntry) {
-                    Text("Select days", style = androidx.compose.material3.MaterialTheme.typography.bodyLarge)
+                    Text("Select days", style = MaterialTheme.typography.bodyLarge)
                     dayNames.forEach { (name, value) ->
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -337,7 +341,6 @@ fun TimetableEntryEditorScreen(
                     }
                     Spacer(modifier = Modifier.height(8.dp))
                 } else {
-                    // Existing single-day dropdown
                     var dayDropdownExpanded by remember { mutableStateOf(false) }
                     val currentDayName = dayNames.find { it.second == uiState.dayOfWeek }?.first ?: "Select Day"
                     OutlinedTextField(
@@ -367,7 +370,6 @@ fun TimetableEntryEditorScreen(
                     Spacer(modifier = Modifier.height(16.dp))
                 }
 
-                // Start time picker
                 OutlinedTextField(
                     value = format12Hour(uiState.startHour, uiState.startMinute),
                     onValueChange = { },
@@ -381,7 +383,6 @@ fun TimetableEntryEditorScreen(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // End time picker
                 OutlinedTextField(
                     value = format12Hour(uiState.endHour, uiState.endMinute),
                     onValueChange = { },
@@ -428,7 +429,7 @@ fun TimetableEntryEditorScreen(
                 if (uiState.error != null) {
                     Text(
                         text = "Error: ${uiState.error}",
-                        color = Color.Red,
+                        color = MaterialTheme.colorScheme.error,
                         modifier = Modifier.padding(bottom = 8.dp)
                     )
                 }
@@ -454,7 +455,6 @@ fun TimetableEntryEditorScreen(
         }
     }
 
-    // Start Time Picker Dialog
     if (showStartPicker) {
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { showStartPicker = false },
@@ -484,7 +484,6 @@ fun TimetableEntryEditorScreen(
         )
     }
 
-    // End Time Picker Dialog
     if (showEndPicker) {
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { showEndPicker = false },

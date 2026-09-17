@@ -34,7 +34,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
@@ -153,7 +152,7 @@ fun NotesListScreen(
                 Text(
                     text = "Error: ${uiState.error}",
                     modifier = Modifier.padding(16.dp),
-                    color = Color.Red
+                    color = MaterialTheme.colorScheme.error
                 )
             } else if (uiState.notes.isEmpty()) {
                 Box(
@@ -163,7 +162,7 @@ fun NotesListScreen(
                     Text(
                         text = "No notes yet.\nTap + to create one.",
                         style = MaterialTheme.typography.bodyLarge,
-                        color = Color.Gray
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             } else {
@@ -237,13 +236,14 @@ private fun NoteCard(
                 Text(
                     text = note.title ?: note.content.take(40),
                     style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = formatDate(note.updatedAt),
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color.Gray
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             IconButton(onClick = onDeleteClick) {

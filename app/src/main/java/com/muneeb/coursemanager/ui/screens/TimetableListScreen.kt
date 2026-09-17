@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
@@ -37,7 +38,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.AndroidViewModel
@@ -144,7 +144,7 @@ fun TimetableListScreen(
     val context = LocalContext.current
 
     LaunchedEffect(Unit) {
-        // Permission will be handled by the composable
+        // Permission handled by the composable below
     }
 
     val canScheduleExact = ReminderScheduler.canScheduleExactAlarms(context)
@@ -185,8 +185,8 @@ fun TimetableListScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 8.dp),
-                    colors = androidx.compose.material3.CardDefaults.cardColors(
-                        containerColor = Color(0xFFFFF3E0)
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer
                     )
                 ) {
                     Row(
@@ -199,7 +199,7 @@ fun TimetableListScreen(
                         Text(
                             text = "Exact alarms are disabled — class reminders won't fire on time",
                             style = MaterialTheme.typography.bodySmall,
-                            color = Color(0xFFE65100)
+                            color = MaterialTheme.colorScheme.onErrorContainer
                         )
                         Button(
                             onClick = { ReminderScheduler.requestExactAlarmPermission(context) }
@@ -223,7 +223,7 @@ fun TimetableListScreen(
                 Text(
                     text = "Error: ${uiState.error}",
                     modifier = Modifier.padding(16.dp),
-                    color = Color.Red
+                    color = MaterialTheme.colorScheme.error
                 )
             } else if (uiState.entries.isEmpty()) {
                 Box(
@@ -233,7 +233,7 @@ fun TimetableListScreen(
                     Text(
                         text = "No classes scheduled.\nTap + to add one.",
                         style = MaterialTheme.typography.bodyLarge,
-                        color = Color.Gray
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             } else {
@@ -259,7 +259,7 @@ fun TimetableListScreen(
                             Text(
                                 text = dayNames[day] ?: "Day $day",
                                 style = MaterialTheme.typography.titleMedium,
-                                color = Color(0xFF222222),
+                                color = MaterialTheme.colorScheme.onBackground,
                                 modifier = Modifier.padding(vertical = 8.dp)
                             )
                         }
@@ -357,11 +357,12 @@ private fun TimetableEntryRow(
                 Text(
                     text = timeStr,
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color.Gray
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
                     text = entry.subjectName,
-                    style = MaterialTheme.typography.bodyLarge
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 val details = mutableListOf<String>()
                 entry.room?.let { details.add("Room: $it") }
@@ -370,7 +371,7 @@ private fun TimetableEntryRow(
                     Text(
                         text = details.joinToString(" · "),
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color.Gray
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }

@@ -24,7 +24,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.muneeb.coursemanager.navigation.Routes
@@ -37,10 +36,9 @@ fun EducationLevelScreen(
     BackHandler(enabled = true) { }
 
     val uiState by viewModel.uiState.collectAsState()
-    var isSubmitting by remember { mutableStateOf(false) }
-    val showLoading = uiState.isLoading || isSubmitting
+    var isNavigating by remember { mutableStateOf(false) }
 
-    if (showLoading) {
+    if (uiState.isLoading) {
         Column(
             modifier = Modifier.fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -50,7 +48,7 @@ fun EducationLevelScreen(
             Text(
                 text = "Setting up your courses...",
                 modifier = Modifier.padding(top = 16.dp),
-                color = Color.Gray
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
         return
@@ -64,10 +62,10 @@ fun EducationLevelScreen(
         ) {
             Text(
                 text = "Error: ${uiState.error}",
-                color = Color.Red
+                color = MaterialTheme.colorScheme.error
             )
             Spacer(modifier = Modifier.height(16.dp))
-            Button(onClick = { /* Retry not implemented */ }) {
+            Button(onClick = { /* retry not implemented */ }) {
                 Text("Go Back")
             }
         }
@@ -86,20 +84,20 @@ fun EducationLevelScreen(
         Text(
             text = "What's your education level?",
             style = MaterialTheme.typography.headlineSmall,
-            color = Color(0xFF222222)
+            color = MaterialTheme.colorScheme.onBackground
         )
 
         Spacer(modifier = Modifier.height(32.dp))
 
         Button(
             onClick = {
-                isSubmitting = true
                 viewModel.setEducationLevel("UNIVERSITY")
-                viewModel.completeOnboarding()
+                navController.navigate(Routes.UNIVERSITY_MAJOR)
             },
+            enabled = !isNavigating,
             colors = ButtonDefaults.buttonColors(
-                containerColor = Color(0xFFE0E0E0),
-                contentColor = Color(0xFF222222)
+                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
             ),
             modifier = Modifier.fillMaxWidth()
         ) {
@@ -110,12 +108,14 @@ fun EducationLevelScreen(
 
         Button(
             onClick = {
+                isNavigating = true
                 viewModel.setEducationLevel("INTER")
                 navController.navigate(Routes.PART_GRADE_SELECTION)
             },
+            enabled = !isNavigating,
             colors = ButtonDefaults.buttonColors(
-                containerColor = Color(0xFFE0E0E0),
-                contentColor = Color(0xFF222222)
+                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
             ),
             modifier = Modifier.fillMaxWidth()
         ) {
@@ -126,12 +126,14 @@ fun EducationLevelScreen(
 
         Button(
             onClick = {
+                isNavigating = true
                 viewModel.setEducationLevel("MATRIC")
                 navController.navigate(Routes.PART_GRADE_SELECTION)
             },
+            enabled = !isNavigating,
             colors = ButtonDefaults.buttonColors(
-                containerColor = Color(0xFFE0E0E0),
-                contentColor = Color(0xFF222222)
+                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
             ),
             modifier = Modifier.fillMaxWidth()
         ) {

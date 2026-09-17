@@ -5,12 +5,16 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -32,6 +36,8 @@ import com.muneeb.coursemanager.data.repository.CourseRepository
 import com.muneeb.coursemanager.data.repository.ItemRepository
 import com.muneeb.coursemanager.data.repository.OnboardingRepository
 import com.muneeb.coursemanager.data.repository.PageRepository
+import com.muneeb.coursemanager.data.repository.PromotionRepository
+import com.muneeb.coursemanager.data.repository.PromotionResult
 import com.muneeb.coursemanager.data.repository.QuickNoteRepository
 import com.muneeb.coursemanager.data.repository.SemesterRepository
 import com.muneeb.coursemanager.data.repository.StudyTaskRepository
@@ -43,6 +49,7 @@ import com.muneeb.coursemanager.ui.util.RequestNotificationPermission
 import com.muneeb.coursemanager.ui.onboarding.OnboardingViewModel
 import com.muneeb.coursemanager.reminders.NotificationChannels
 import com.muneeb.coursemanager.ui.theme.NotesManagerTheme
+import com.muneeb.coursemanager.ui.theme.ThemePalette
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 
@@ -78,17 +85,32 @@ class MainActivity : ComponentActivity() {
             courseRepository = courseRepository,
             categoryRepository = categoryRepository
         )
+        val promotionRepository = PromotionRepository(
+            semesterRepository = semesterRepository,
+            onboardingRepository = onboardingRepository,
+            userPreferences = userPreferences
+        )
 
         setContent {
-            val isDarkMode by userPreferences.isDarkMode.collectAsState(initial = false)
+            val storedPref by userPreferences.isDarkModeOrNull.collectAsState(initial = null)
+            val systemDark = isSystemInDarkTheme()
+            val isDarkMode = storedPref ?: systemDark
 
-            NotesManagerTheme(darkTheme = isDarkMode) {
+            val paletteString by userPreferences.selectedPalette.collectAsState(initial = "MONOCHROME")
+            val palette = try {
+                ThemePalette.valueOf(paletteString)
+            } catch (_: Exception) {
+                ThemePalette.MONOCHROME
+            }
+
+            NotesManagerTheme(palette = palette, darkTheme = isDarkMode) {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     RequestNotificationPermission { /* handle */ }
 
                     AppContent(
                         userPreferences = userPreferences,
                         isDarkMode = isDarkMode,
+                        selectedPalette = palette,
                         semesterRepository = semesterRepository,
                         courseRepository = courseRepository,
                         categoryRepository = categoryRepository,
@@ -97,7 +119,8 @@ class MainActivity : ComponentActivity() {
                         quickNoteRepository = quickNoteRepository,
                         timetableRepository = timetableRepository,
                         studyTaskRepository = studyTaskRepository,
-                        onboardingRepository = onboardingRepository
+                        onboardingRepository = onboardingRepository,
+                        promotionRepository = promotionRepository
                     )
                 }
             }
@@ -109,6 +132,7 @@ class MainActivity : ComponentActivity() {
 fun AppContent(
     userPreferences: UserPreferences,
     isDarkMode: Boolean,
+    selectedPalette: ThemePalette,
     semesterRepository: SemesterRepository,
     courseRepository: CourseRepository,
     categoryRepository: CategoryRepository,
@@ -117,26 +141,28 @@ fun AppContent(
     quickNoteRepository: QuickNoteRepository,
     timetableRepository: TimetableRepository,
     studyTaskRepository: StudyTaskRepository,
-    onboardingRepository: OnboardingRepository
+    onboardingRepository: OnboardingRepository,
+    promotionRepository: PromotionRepository
 ) {
     var startDestination by remember { mutableStateOf<String?>(null) }
+    var postNameEntryDestination by remember { mutableStateOf(Routes.EDUCATION_LEVEL) }
 
     LaunchedEffect(Unit) {
+        val name = userPreferences.userName.firstOrNull()
         val level = userPreferences.selectedEducationLevel.firstOrNull()
         val semesterId = userPreferences.selectedSemesterId.firstOrNull()
 
-        if (level == null) {
-            startDestination = Routes.EDUCATION_LEVEL
+        val realDestination = if (level == null) {
+            Routes.EDUCATION_LEVEL
         } else {
             when (level) {
-                "UNIVERSITY" -> startDestination = Routes.SEMESTER_LIST
-                else -> startDestination = if (semesterId != null) {
-                    Routes.courseList(semesterId)
-                } else {
-                    Routes.SEMESTER_LIST
-                }
+                "UNIVERSITY" -> Routes.SEMESTER_LIST
+                else -> if (semesterId != null) Routes.courseList(semesterId) else Routes.SEMESTER_LIST
             }
         }
+
+        postNameEntryDestination = realDestination
+        startDestination = if (name == null) Routes.NAME_ENTRY else realDestination
     }
 
     if (startDestination == null) {
@@ -153,9 +179,23 @@ fun AppContent(
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val educationLevel by userPreferences.selectedEducationLevel.collectAsState(initial = null)
+    val partGrade by userPreferences.selectedPartGrade.collectAsState(initial = null)
+    val universityMajor by userPreferences.selectedUniversityMajor.collectAsState(initial = null)
+    val currentSemesterId by userPreferences.selectedSemesterId.collectAsState(initial = null)
+    val userName by userPreferences.userName.collectAsState(initial = null)
 
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = currentBackStackEntry?.destination?.route
+
+    val factory = OnboardingViewModel.Factory(
+        userPreferences = userPreferences,
+        onboardingRepository = onboardingRepository,
+        semesterRepository = semesterRepository
+    )
+    val onboardingViewModel: OnboardingViewModel = viewModel(factory = factory)
+
+    var showPromotionWarning by remember { mutableStateOf(false) }
+    var showPromotionSuccess by remember { mutableStateOf(false) }
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -165,6 +205,16 @@ fun AppContent(
                 navController = navController,
                 isDarkMode = isDarkMode,
                 educationLevel = educationLevel,
+                partGrade = partGrade,
+                universityMajor = universityMajor,
+                currentSemesterId = currentSemesterId,
+                userName = userName,
+                selectedPalette = selectedPalette,
+                onPaletteSelected = { newPalette ->
+                    scope.launch {
+                        userPreferences.setSelectedPalette(newPalette.name)
+                    }
+                },
                 onToggleDarkMode = { enabled ->
                     scope.launch {
                         userPreferences.setDarkMode(enabled)
@@ -174,21 +224,21 @@ fun AppContent(
                     scope.launch {
                         drawerState.close()
                     }
+                },
+                onPromoteClick = {
+                    scope.launch {
+                        drawerState.close()
+                    }
+                    showPromotionWarning = true
                 }
             )
         }
     ) {
-        val factory = OnboardingViewModel.Factory(
-            userPreferences = userPreferences,
-            onboardingRepository = onboardingRepository,
-            semesterRepository = semesterRepository
-        )
-        val onboardingViewModel: OnboardingViewModel = viewModel(factory = factory)
-
         AppNavHost(
             navController = navController,
             viewModel = onboardingViewModel,
             startDestination = startDestination!!,
+            postNameEntryDestination = postNameEntryDestination,
             onMenuClick = {
                 scope.launch {
                     if (drawerState.isOpen) drawerState.close() else drawerState.open()
@@ -212,5 +262,69 @@ fun AppContent(
         scope.launch {
             drawerState.close()
         }
+    }
+
+    if (showPromotionWarning) {
+        AlertDialog(
+            onDismissRequest = { showPromotionWarning = false },
+            title = { Text("Promote to Next Level") },
+            text = {
+                Text("This moves you to the next level. Your current folders and files are kept as history and stay accessible.")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showPromotionWarning = false
+                        scope.launch {
+                            val currentId = userPreferences.selectedSemesterId.firstOrNull()
+                            if (currentId == null) return@launch
+                            when (val result = promotionRepository.promote(currentId)) {
+                                is PromotionResult.SameLevelPromoted -> {
+                                    userPreferences.setSelectedSemesterId(result.newSemesterId)
+                                    userPreferences.setSelectedPartGrade(result.newPart)
+                                    showPromotionSuccess = true
+                                }
+                                is PromotionResult.NeedsGroupSelection -> {
+                                    onboardingViewModel.resetForNewFlow()
+                                    onboardingViewModel.setEducationLevel(result.newLevel)
+                                    onboardingViewModel.setPartGrade(result.newPart)
+                                    navController.navigate(Routes.GROUP_SELECTION) {
+                                        popUpTo(Routes.SEMESTER_LIST) { inclusive = false }
+                                    }
+                                }
+                                PromotionResult.PromotedToUniversity -> {
+                                    onboardingViewModel.resetForNewFlow()
+                                    onboardingViewModel.setEducationLevel("UNIVERSITY")
+                                    navController.navigate(Routes.UNIVERSITY_MAJOR)
+                                }
+                                PromotionResult.NotPromotable -> {
+                                    // no-op
+                                }
+                            }
+                        }
+                    }
+                ) {
+                    Text("Confirm")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPromotionWarning = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    if (showPromotionSuccess) {
+        AlertDialog(
+            onDismissRequest = { showPromotionSuccess = false },
+            title = { Text("Congratulations") },
+            text = { Text("Congratulations! You've been promoted.") },
+            confirmButton = {
+                TextButton(onClick = { showPromotionSuccess = false }) {
+                    Text("OK")
+                }
+            }
+        )
     }
 }

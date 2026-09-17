@@ -37,7 +37,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -46,9 +45,11 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavController
 import com.muneeb.coursemanager.data.entities.Semester
+import com.muneeb.coursemanager.data.formatStageLabel
 import com.muneeb.coursemanager.data.preferences.UserPreferences
 import com.muneeb.coursemanager.data.repository.SemesterRepository
 import com.muneeb.coursemanager.navigation.Routes
+import com.muneeb.coursemanager.ui.theme.LocalExtraColors
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -78,9 +79,9 @@ class SemesterListViewModel(
     private fun loadData() {
         viewModelScope.launch {
             combine(
-                semesterRepository.getAllSemesters(),
+                semesterRepository.getUniversitySemesters(),
                 userPreferences.selectedEducationLevel,
-                userPreferences.isDarkMode
+                userPreferences.isDarkModeOrNull
             ) { semesters, level, isDark ->
                 val isUniversity = level == "UNIVERSITY"
                 val showDialog = isUniversity && semesters.isEmpty()
@@ -90,7 +91,7 @@ class SemesterListViewModel(
                         isLoading = false,
                         error = null,
                         showMandatoryDialog = showDialog,
-                        isDarkMode = isDark
+                        isDarkMode = isDark ?: false
                     )
                 }
             }.collect { /* handled in combine */ }
@@ -139,6 +140,7 @@ fun SemesterListScreen(
     var showAddDialog by remember { mutableStateOf(false) }
     var newSemesterName by remember { mutableStateOf("") }
     var semesterNumber by remember { mutableStateOf("") }
+    val extraColors = LocalExtraColors.current
 
     if (uiState.showMandatoryDialog) {
         AlertDialog(
@@ -213,7 +215,7 @@ fun SemesterListScreen(
                 Text(
                     text = "Error: ${uiState.error}",
                     modifier = Modifier.padding(16.dp),
-                    color = Color.Red
+                    color = MaterialTheme.colorScheme.error
                 )
             } else {
                 LazyColumn(
@@ -221,13 +223,20 @@ fun SemesterListScreen(
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     items(uiState.semesters) { semester ->
+                        val displayText: String = when {
+                            semester.educationLevel == "UNIVERSITY" -> semester.name
+                            semester.educationLevel == null -> semester.name
+                            else -> formatStageLabel(semester.educationLevel, semester.partGrade)
+                        }
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(200.dp)
                                 .padding(4.dp),
                             shape = RoundedCornerShape(16.dp),
-                            colors = CardDefaults.cardColors(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = extraColors.cardAccentContainer
+                            ),
                             onClick = {
                                 navController.navigate(Routes.courseList(semester.semesterId))
                             }
@@ -237,10 +246,10 @@ fun SemesterListScreen(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
-                                    text = semester.name,
+                                    text = displayText,
                                     style = MaterialTheme.typography.headlineMedium,
-                                    color = if (uiState.isDarkMode) Color.White else Color(0xFF222222),
-                                    fontWeight = if (uiState.isDarkMode) FontWeight.Bold else FontWeight.Normal
+                                    color = extraColors.cardAccentContent,
+                                    fontWeight = FontWeight.Bold
                                 )
                             }
                         }

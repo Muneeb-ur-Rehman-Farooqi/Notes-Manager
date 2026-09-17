@@ -19,6 +19,7 @@ data class OnboardingUiState(
     val selectedGroup: String? = null,
     val selectedElectiveChoice: String? = null,
     val selectedFreeTextElectives: List<String>? = null,
+    val selectedUniversityMajor: String? = null,
     val isLoading: Boolean = false,
     val isComplete: Boolean = false,
     val error: String? = null
@@ -41,6 +42,7 @@ class OnboardingViewModel(
                 selectedGroup = null,
                 selectedElectiveChoice = null,
                 selectedFreeTextElectives = null,
+                selectedUniversityMajor = null,
                 error = null
             )
         }
@@ -87,6 +89,23 @@ class OnboardingViewModel(
         }
     }
 
+    fun setUniversityMajor(major: String) {
+        _uiState.update { state ->
+            state.copy(
+                selectedUniversityMajor = major,
+                error = null
+            )
+        }
+    }
+
+    fun resetCompletion() {
+        _uiState.update { it.copy(isComplete = false) }
+    }
+
+    fun resetForNewFlow() {
+        _uiState.update { OnboardingUiState() }
+    }
+
     fun completeOnboarding() {
         viewModelScope.launch {
             val state = _uiState.value
@@ -100,37 +119,46 @@ class OnboardingViewModel(
             _uiState.update { it.copy(isLoading = true, error = null) }
 
             try {
-                // University: skip semester creation
                 if (level == "UNIVERSITY") {
+                    val major = state.selectedUniversityMajor
+                    if (major.isNullOrBlank()) {
+                        _uiState.update {
+                            it.copy(
+                                error = "Please enter your degree / major.",
+                                isLoading = false
+                            )
+                        }
+                        return@launch
+                    }
                     userPreferences.setSelectedEducationLevel(level)
-                    userPreferences.setSelectedGroup(state.selectedGroup)
+                    userPreferences.setSelectedUniversityMajor(major)
+                    userPreferences.setSelectedPartGrade(null)
                     userPreferences.setSelectedSemesterId(null)
                     _uiState.update { it.copy(isComplete = true) }
                     return@launch
                 }
 
-                // Matric/Inter: validate part and group
                 val part = state.selectedPartGrade
                 val group = state.selectedGroup
                 if (part == null) {
-                    _uiState.update { it.copy(error = "Please select a part/grade.") }
+                    _uiState.update { it.copy(error = "Please select a part/grade.", isLoading = false) }
                     return@launch
                 }
                 if (group == null) {
-                    _uiState.update { it.copy(error = "Please select a group.") }
+                    _uiState.update { it.copy(error = "Please select a group.", isLoading = false) }
                     return@launch
                 }
 
-                // Create semester
                 val semester = Semester(
                     name = "$level $part",
                     sortOrder = 0,
                     educationLevel = level,
-                    partGrade = part
+                    partGrade = part,
+                    electiveChoice = state.selectedElectiveChoice,
+                    freeTextElectives = state.selectedFreeTextElectives?.joinToString(",")
                 )
                 val semesterId = semesterRepository.insert(semester)
 
-                // Apply template
                 onboardingRepository.applyEducationTemplate(
                     semesterId = semesterId,
                     level = level,
@@ -140,9 +168,9 @@ class OnboardingViewModel(
                     freeTexts = state.selectedFreeTextElectives
                 )
 
-                // Save preferences
                 userPreferences.setSelectedEducationLevel(level)
                 userPreferences.setSelectedGroup(group)
+                userPreferences.setSelectedPartGrade(part)
                 userPreferences.setSelectedSemesterId(semesterId)
 
                 _uiState.update { it.copy(isComplete = true) }

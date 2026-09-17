@@ -22,7 +22,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.muneeb.coursemanager.navigation.Routes
@@ -63,7 +62,7 @@ fun PartOrGradeSelectionScreen(
         Text(
             text = "Select your ${if (level == "INTER") "Part" else "Grade"}",
             style = MaterialTheme.typography.headlineSmall,
-            color = Color(0xFF222222)
+            color = MaterialTheme.colorScheme.onBackground
         )
 
         Spacer(modifier = Modifier.height(32.dp))
@@ -75,8 +74,8 @@ fun PartOrGradeSelectionScreen(
                     navController.navigate(Routes.GROUP_SELECTION)
                 },
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFFE0E0E0),
-                    contentColor = Color(0xFF222222)
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                 ),
                 modifier = Modifier
                     .padding(horizontal = 16.dp)
