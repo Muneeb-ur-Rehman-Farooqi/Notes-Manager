@@ -1,6 +1,7 @@
 package com.muneeb.coursemanager.ui.screens
 
 import android.app.Application
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -16,6 +17,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -40,14 +42,13 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavController
 import com.muneeb.coursemanager.data.entities.StudyTask
-import com.muneeb.coursemanager.data.preferences.UserPreferences
 import com.muneeb.coursemanager.data.repository.StudyTaskRepository
 import com.muneeb.coursemanager.reminders.NotificationChannels
 import com.muneeb.coursemanager.reminders.ReminderScheduler
+import com.muneeb.coursemanager.reminders.StudyTaskReminderReceiver
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -58,10 +59,11 @@ data class StudyTaskEditorUiState(
     val isLoading: Boolean = false,
     val isNewTask: Boolean = true,
     val title: String = "",
-    val dateMillis: Long = System.currentTimeMillis(),
-    val hasReminder: Boolean = false,
-    val reminderHour: Int = 9,
-    val reminderMinute: Int = 0,
+    val isTodayTask: Boolean = true,
+    val deadlineDateMillis: Long? = null,
+    val hasSpecificTime: Boolean = false,
+    val deadlineHour: Int = 9,
+    val deadlineMinute: Int = 0,
     val error: String? = null,
     val isSaving: Boolean = false
 )
@@ -71,8 +73,6 @@ class StudyTaskEditorViewModel(
     private val studyTaskRepository: StudyTaskRepository,
     private val taskId: Long
 ) : AndroidViewModel(application) {
-
-    private val userPreferences = UserPreferences(application)
 
     private val _uiState = MutableStateFlow(StudyTaskEditorUiState())
     val uiState: StateFlow<StudyTaskEditorUiState> = _uiState.asStateFlow()
@@ -89,15 +89,17 @@ class StudyTaskEditorViewModel(
             try {
                 val task = studyTaskRepository.getById(taskId)
                 if (task != null) {
+                    val hasTime = task.deadlineHour != null && task.deadlineMinute != null
                     _uiState.update {
                         it.copy(
                             isLoading = false,
                             isNewTask = false,
                             title = task.title,
-                            dateMillis = task.dateMillis,
-                            hasReminder = task.hasReminder,
-                            reminderHour = task.reminderHour ?: 9,
-                            reminderMinute = task.reminderMinute ?: 0
+                            isTodayTask = task.isTodayTask,
+                            deadlineDateMillis = task.deadlineDateMillis,
+                            hasSpecificTime = hasTime,
+                            deadlineHour = task.deadlineHour ?: 9,
+                            deadlineMinute = task.deadlineMinute ?: 0
                         )
                     }
                 } else {
@@ -109,28 +111,65 @@ class StudyTaskEditorViewModel(
         }
     }
 
+    fun updateTitle(title: String) {
+        _uiState.update { it.copy(title = title) }
+    }
+
+    fun setTodayMode() {
+        _uiState.update { it.copy(isTodayTask = true, error = null) }
+    }
+
+    fun setDeadlineMode() {
+        _uiState.update { it.copy(isTodayTask = false, error = null) }
+    }
+
+    fun updateDeadlineDate(dateMillis: Long) {
+        _uiState.update { it.copy(deadlineDateMillis = dateMillis, error = null) }
+    }
+
+    fun toggleSpecificTime() {
+        _uiState.update { state ->
+            state.copy(hasSpecificTime = !state.hasSpecificTime)
+        }
+    }
+
+    fun updateDeadlineHour(hour: Int) {
+        _uiState.update { it.copy(deadlineHour = hour) }
+    }
+
+    fun updateDeadlineMinute(minute: Int) {
+        _uiState.update { it.copy(deadlineMinute = minute) }
+    }
+
     suspend fun saveTask(): Boolean {
         val state = _uiState.value
         if (state.title.isBlank()) {
             _uiState.update { it.copy(error = "Title is required") }
             return false
         }
+        if (!state.isTodayTask && state.deadlineDateMillis == null) {
+            _uiState.update { it.copy(error = "Please pick a deadline date") }
+            return false
+        }
         _uiState.update { it.copy(isSaving = true, error = null) }
         try {
+            // Cancel any stale escalation alarm before re-inserting
             if (!state.isNewTask) {
-                val oldTask = studyTaskRepository.getById(taskId)
-                if (oldTask?.hasReminder == true) {
-                    ReminderScheduler.cancelReminder(application, taskId.toInt())
-                }
+                ReminderScheduler.cancelReminder(
+                    context = application,
+                    requestCode = taskId.toInt(),
+                    receiverClass = StudyTaskReminderReceiver::class.java
+                )
             }
 
             val task = StudyTask(
                 taskId = if (state.isNewTask) 0 else taskId,
                 title = state.title,
-                dateMillis = state.dateMillis,
-                hasReminder = state.hasReminder,
-                reminderHour = if (state.hasReminder) state.reminderHour else null,
-                reminderMinute = if (state.hasReminder) state.reminderMinute else null,
+                isTodayTask = state.isTodayTask,
+                createdDateMillis = System.currentTimeMillis(),
+                deadlineDateMillis = if (state.isTodayTask) null else state.deadlineDateMillis,
+                deadlineHour = if (!state.isTodayTask && state.hasSpecificTime) state.deadlineHour else null,
+                deadlineMinute = if (!state.isTodayTask && state.hasSpecificTime) state.deadlineMinute else null,
                 isCompleted = false
             )
             val newId = if (state.isNewTask) {
@@ -139,60 +178,37 @@ class StudyTaskEditorViewModel(
                 studyTaskRepository.update(task)
                 taskId
             }
-            if (state.hasReminder) {
-                val name = userPreferences.userName.firstOrNull()
-                val baseBody = "Time to study!"
-                val body = if (name != null) "Hey $name — $baseBody" else baseBody
-                val triggerMillis = computeTriggerMillis(state.dateMillis, state.reminderHour, state.reminderMinute)
-                ReminderScheduler.scheduleExactReminder(
-                    context = application,
-                    requestCode = newId.toInt(),
-                    triggerAtMillis = triggerMillis,
-                    channelId = NotificationChannels.CHANNEL_STUDY_REMINDERS,
-                    title = state.title,
-                    body = body,
-                    isWeeklyRecurring = false
+
+            // Schedule escalation for deadline tasks
+            if (!state.isTodayTask && state.deadlineDateMillis != null) {
+                val effective = ReminderScheduler.computeEffectiveDeadlineMillis(
+                    dateMillis = state.deadlineDateMillis,
+                    hour = if (state.hasSpecificTime) state.deadlineHour else null,
+                    minute = if (state.hasSpecificTime) state.deadlineMinute else null
                 )
+                val trigger = ReminderScheduler.firstEscalationTriggerMillis(effective)
+                if (trigger != null) {
+                    ReminderScheduler.scheduleExactReminder(
+                        context = application,
+                        requestCode = newId.toInt(),
+                        triggerAtMillis = trigger,
+                        channelId = NotificationChannels.CHANNEL_STUDY_REMINDERS,
+                        title = state.title,
+                        body = "Due soon",
+                        isWeeklyRecurring = false,
+                        receiverClass = StudyTaskReminderReceiver::class.java,
+                        extraAlarmType = StudyTaskReminderReceiver.ALARM_TYPE_ESCALATION,
+                        extraTaskId = newId
+                    )
+                }
             }
+
             _uiState.update { it.copy(isSaving = false) }
             return true
         } catch (e: Exception) {
             _uiState.update { it.copy(error = e.message, isSaving = false) }
             return false
         }
-    }
-
-    private fun computeTriggerMillis(dateMillis: Long, hour: Int, minute: Int): Long {
-        val cal = java.util.Calendar.getInstance().apply {
-            timeInMillis = dateMillis
-            set(java.util.Calendar.HOUR_OF_DAY, hour)
-            set(java.util.Calendar.MINUTE, minute)
-            set(java.util.Calendar.SECOND, 0)
-            set(java.util.Calendar.MILLISECOND, 0)
-        }
-        return cal.timeInMillis
-    }
-
-    fun updateTitle(title: String) {
-        _uiState.update { it.copy(title = title) }
-    }
-
-    fun updateDate(dateMillis: Long) {
-        _uiState.update { it.copy(dateMillis = dateMillis) }
-    }
-
-    fun toggleReminder() {
-        _uiState.update { state ->
-            state.copy(hasReminder = !state.hasReminder)
-        }
-    }
-
-    fun updateReminderHour(hour: Int) {
-        _uiState.update { it.copy(reminderHour = hour) }
-    }
-
-    fun updateReminderMinute(minute: Int) {
-        _uiState.update { it.copy(reminderMinute = minute) }
     }
 
     class Factory(
@@ -222,11 +238,11 @@ fun StudyTaskEditorScreen(
     var showTimePicker by remember { mutableStateOf(false) }
 
     val datePickerState = rememberDatePickerState(
-        initialSelectedDateMillis = uiState.dateMillis
+        initialSelectedDateMillis = uiState.deadlineDateMillis ?: System.currentTimeMillis()
     )
     val timePickerState = rememberTimePickerState(
-        initialHour = uiState.reminderHour,
-        initialMinute = uiState.reminderMinute,
+        initialHour = uiState.deadlineHour,
+        initialMinute = uiState.deadlineMinute,
         is24Hour = false
     )
 
@@ -258,45 +274,65 @@ fun StudyTaskEditorScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                OutlinedTextField(
-                    value = formatDate(uiState.dateMillis),
-                    onValueChange = { },
-                    label = { Text("Date") },
-                    readOnly = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    trailingIcon = {
-                        TextButton(onClick = { showDatePicker = true }) { Text("📅") }
-                    }
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Switch(
-                        checked = uiState.hasReminder,
-                        onCheckedChange = { viewModel.toggleReminder() }
+                    FilterChip(
+                        selected = uiState.isTodayTask,
+                        onClick = { viewModel.setTodayMode() },
+                        label = { Text("Today") }
                     )
-                    Text(
-                        text = "Set reminder",
-                        modifier = Modifier.padding(start = 8.dp)
+                    FilterChip(
+                        selected = !uiState.isTodayTask,
+                        onClick = { viewModel.setDeadlineMode() },
+                        label = { Text("Has a deadline") }
                     )
                 }
 
-                if (uiState.hasReminder) {
-                    Spacer(modifier = Modifier.height(8.dp))
+                if (!uiState.isTodayTask) {
+                    Spacer(modifier = Modifier.height(16.dp))
+
                     OutlinedTextField(
-                        value = format12Hour(uiState.reminderHour, uiState.reminderMinute),
+                        value = uiState.deadlineDateMillis?.let { formatDate(it) } ?: "",
                         onValueChange = { },
-                        label = { Text("Reminder Time") },
+                        label = { Text("Deadline date") },
                         readOnly = true,
                         modifier = Modifier.fillMaxWidth(),
                         trailingIcon = {
-                            TextButton(onClick = { showTimePicker = true }) { Text("🕐") }
+                            TextButton(onClick = { showDatePicker = true }) { Text("📅") }
                         }
                     )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Switch(
+                            checked = uiState.hasSpecificTime,
+                            onCheckedChange = { viewModel.toggleSpecificTime() }
+                        )
+                        Text(
+                            text = "Set a specific time",
+                            modifier = Modifier.padding(start = 8.dp)
+                        )
+                    }
+
+                    if (uiState.hasSpecificTime) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = format12Hour(uiState.deadlineHour, uiState.deadlineMinute),
+                            onValueChange = { },
+                            label = { Text("Deadline time") },
+                            readOnly = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            trailingIcon = {
+                                TextButton(onClick = { showTimePicker = true }) { Text("🕐") }
+                            }
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -336,7 +372,7 @@ fun StudyTaskEditorScreen(
                 TextButton(
                     onClick = {
                         datePickerState.selectedDateMillis?.let {
-                            viewModel.updateDate(it)
+                            viewModel.updateDeadlineDate(it)
                         }
                         showDatePicker = false
                     }
@@ -367,8 +403,8 @@ fun StudyTaskEditorScreen(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        viewModel.updateReminderHour(timePickerState.hour)
-                        viewModel.updateReminderMinute(timePickerState.minute)
+                        viewModel.updateDeadlineHour(timePickerState.hour)
+                        viewModel.updateDeadlineMinute(timePickerState.minute)
                         showTimePicker = false
                     }
                 ) {

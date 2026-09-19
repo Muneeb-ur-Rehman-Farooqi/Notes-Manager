@@ -44,14 +44,20 @@ import com.muneeb.coursemanager.data.repository.StudyTaskRepository
 import com.muneeb.coursemanager.data.repository.TimetableRepository
 import com.muneeb.coursemanager.navigation.AppNavHost
 import com.muneeb.coursemanager.navigation.Routes
+import com.muneeb.coursemanager.reminders.NotificationChannels
+import com.muneeb.coursemanager.reminders.ReminderScheduler
+import com.muneeb.coursemanager.reminders.StudyTaskReminderReceiver
 import com.muneeb.coursemanager.ui.components.AppDrawerContent
 import com.muneeb.coursemanager.ui.util.RequestNotificationPermission
 import com.muneeb.coursemanager.ui.onboarding.OnboardingViewModel
-import com.muneeb.coursemanager.reminders.NotificationChannels
 import com.muneeb.coursemanager.ui.theme.NotesManagerTheme
 import com.muneeb.coursemanager.ui.theme.ThemePalette
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
+import java.util.Calendar
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -91,6 +97,32 @@ class MainActivity : ComponentActivity() {
             userPreferences = userPreferences
         )
 
+        // Purge stale Today tasks from previous days
+        val cleanupScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        cleanupScope.launch {
+            val todayStart = Calendar.getInstance().apply {
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }.timeInMillis
+            studyTaskRepository.deleteStaleTodayTasks(todayStart)
+        }
+
+        // Re-arm the daily 4 PM ping on every launch
+        ReminderScheduler.scheduleExactReminder(
+            context = this,
+            requestCode = StudyTaskReminderReceiver.DAILY_PING_REQUEST_CODE,
+            triggerAtMillis = ReminderScheduler.computeNextDailyPingMillis(),
+            channelId = NotificationChannels.CHANNEL_STUDY_REMINDERS,
+            title = "To-Do List",
+            body = "You have pending tasks",
+            isWeeklyRecurring = false,
+            receiverClass = StudyTaskReminderReceiver::class.java,
+            extraAlarmType = StudyTaskReminderReceiver.ALARM_TYPE_DAILY_PING,
+            extraTaskId = null
+        )
+
         setContent {
             val storedPref by userPreferences.isDarkModeOrNull.collectAsState(initial = null)
             val systemDark = isSystemInDarkTheme()
@@ -105,7 +137,7 @@ class MainActivity : ComponentActivity() {
 
             NotesManagerTheme(palette = palette, darkTheme = isDarkMode) {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    RequestNotificationPermission { /* handle */ }
+                    RequestNotificationPermission { }
 
                     AppContent(
                         userPreferences = userPreferences,

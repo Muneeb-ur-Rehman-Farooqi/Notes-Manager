@@ -8,9 +8,10 @@ data class StudyTask(
     @PrimaryKey(autoGenerate = true)
     val taskId: Long = 0,
     val title: String,
-    val dateMillis: Long,
-    val hasReminder: Boolean = false,
-    val reminderHour: Int? = null,
-    val reminderMinute: Int? = null,
+    val isTodayTask: Boolean,
+    val createdDateMillis: Long = System.currentTimeMillis(),
+    val deadlineDateMillis: Long? = null,
+    val deadlineHour: Int? = null,
+    val deadlineMinute: Int? = null,
     val isCompleted: Boolean = false
 )

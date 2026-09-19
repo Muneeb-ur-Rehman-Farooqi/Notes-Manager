@@ -16,4 +16,7 @@ class StudyTaskRepository(
     suspend fun update(task: StudyTask) = studyTaskDao.update(task)
 
     suspend fun delete(task: StudyTask) = studyTaskDao.delete(task)
+
+    suspend fun deleteStaleTodayTasks(todayStartMillis: Long) =
+        studyTaskDao.deleteStaleTodayTasks(todayStartMillis)
 }

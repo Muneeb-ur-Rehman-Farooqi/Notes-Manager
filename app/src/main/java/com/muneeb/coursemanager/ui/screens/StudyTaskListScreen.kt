@@ -14,15 +14,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -32,14 +32,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -52,6 +48,8 @@ import com.muneeb.coursemanager.data.entities.StudyTask
 import com.muneeb.coursemanager.data.repository.StudyTaskRepository
 import com.muneeb.coursemanager.navigation.Routes
 import com.muneeb.coursemanager.reminders.ReminderScheduler
+import com.muneeb.coursemanager.reminders.StudyTaskReminderReceiver
+import com.muneeb.coursemanager.ui.components.CountdownTimerText
 import com.muneeb.coursemanager.ui.util.RequestNotificationPermission
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -62,12 +60,12 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import kotlin.math.abs
 
 data class StudyTaskListUiState(
     val tasks: List<StudyTask> = emptyList(),
     val isLoading: Boolean = true,
-    val error: String? = null,
-    val taskToDelete: StudyTask? = null
+    val error: String? = null
 )
 
 class StudyTaskListViewModel(
@@ -96,22 +94,14 @@ class StudyTaskListViewModel(
 
     suspend fun toggleCompleted(task: StudyTask) {
         val updated = task.copy(isCompleted = !task.isCompleted)
-        if (updated.isCompleted && task.hasReminder) {
-            ReminderScheduler.cancelReminder(application, task.taskId.toInt())
+        if (updated.isCompleted) {
+            ReminderScheduler.cancelReminder(
+                context = application,
+                requestCode = task.taskId.toInt(),
+                receiverClass = StudyTaskReminderReceiver::class.java
+            )
         }
         studyTaskRepository.update(updated)
-    }
-
-    suspend fun deleteTask(task: StudyTask) {
-        if (task.hasReminder) {
-            ReminderScheduler.cancelReminder(application, task.taskId.toInt())
-        }
-        studyTaskRepository.delete(task)
-        _uiState.update { it.copy(taskToDelete = null) }
-    }
-
-    fun setTaskToDelete(task: StudyTask?) {
-        _uiState.update { it.copy(taskToDelete = task) }
     }
 
     class Factory(
@@ -128,6 +118,72 @@ class StudyTaskListViewModel(
     }
 }
 
+private fun formatDateHeader(dateMillis: Long): String {
+    val today = Calendar.getInstance().apply {
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }
+    val tomorrow = Calendar.getInstance().apply {
+        timeInMillis = today.timeInMillis + (24 * 60 * 60 * 1000L)
+    }
+    val taskDate = Calendar.getInstance().apply { timeInMillis = dateMillis }
+
+    return when {
+        taskDate.get(Calendar.YEAR) == today.get(Calendar.YEAR) &&
+                taskDate.get(Calendar.DAY_OF_YEAR) == today.get(Calendar.DAY_OF_YEAR) -> "Today"
+        taskDate.get(Calendar.YEAR) == tomorrow.get(Calendar.YEAR) &&
+                taskDate.get(Calendar.DAY_OF_YEAR) == tomorrow.get(Calendar.DAY_OF_YEAR) -> "Tomorrow"
+        else -> {
+            val sdf = SimpleDateFormat("EEE, MMM d", Locale.getDefault())
+            sdf.format(Date(dateMillis))
+        }
+    }
+}
+
+private fun deadlineEpochMillis(task: StudyTask): Long? {
+    val date = task.deadlineDateMillis ?: return null
+    val cal = Calendar.getInstance().apply {
+        timeInMillis = date
+        set(Calendar.HOUR_OF_DAY, task.deadlineHour ?: 23)
+        set(Calendar.MINUTE, task.deadlineMinute ?: 59)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }
+    return cal.timeInMillis
+}
+
+private fun isOverdue(task: StudyTask, nowMillis: Long): Boolean {
+    val deadline = deadlineEpochMillis(task) ?: return false
+    return deadline < nowMillis
+}
+
+private fun timeLeftBadge(task: StudyTask, nowMillis: Long): String? {
+    val deadline = deadlineEpochMillis(task) ?: return null
+    val diff = deadline - nowMillis
+    return if (diff < 0) {
+        val absDiff = abs(diff)
+        val days = absDiff / (24L * 60 * 60 * 1000)
+        val hours = (absDiff % (24L * 60 * 60 * 1000)) / (60L * 60 * 1000)
+        val minutes = (absDiff % (60L * 60 * 1000)) / (60L * 1000)
+        when {
+            days > 0 -> "Overdue by ${days}d ${hours}h"
+            hours > 0 -> "Overdue by ${hours}h ${minutes}m"
+            else -> "Overdue by ${minutes}m"
+        }
+    } else {
+        val days = diff / (24L * 60 * 60 * 1000)
+        val hours = (diff % (24L * 60 * 60 * 1000)) / (60L * 60 * 1000)
+        val minutes = (diff % (60L * 60 * 1000)) / (60L * 1000)
+        when {
+            days > 0 -> "${days}d ${hours}h left"
+            hours > 0 -> "${hours}h ${minutes}m left"
+            else -> "${minutes}m left"
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StudyTaskListScreen(
@@ -139,10 +195,23 @@ fun StudyTaskListScreen(
 
     RequestNotificationPermission { }
 
+    val incompleteTasks = uiState.tasks.filter { !it.isCompleted }
+    val nowMillis = System.currentTimeMillis()
+
+    val overdueTasks = incompleteTasks.filter { !it.isTodayTask && isOverdue(it, nowMillis) }
+
+    val upcomingDeadlineTasks = incompleteTasks
+        .filter { !it.isTodayTask && !isOverdue(it, nowMillis) && it.deadlineDateMillis != null }
+        .sortedBy { deadlineEpochMillis(it) }
+    val nextFlagTask = upcomingDeadlineTasks.firstOrNull()
+
+    val todayTasks = incompleteTasks.filter { it.isTodayTask }
+    val remainingDeadlineTasks = upcomingDeadlineTasks
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Study Tasks") },
+                title = { Text("To-Do List") },
                 navigationIcon = {
                     IconButton(onClick = onMenuClick) {
                         Icon(Icons.Default.Menu, contentDescription = "Menu")
@@ -182,7 +251,7 @@ fun StudyTaskListScreen(
                         color = MaterialTheme.colorScheme.error
                     )
                 }
-                uiState.tasks.isEmpty() -> {
+                incompleteTasks.isEmpty() -> {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -190,115 +259,164 @@ fun StudyTaskListScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "No study tasks.\nTap + to add one.",
+                            text = if (uiState.tasks.isEmpty()) {
+                                "No tasks yet.\nTap + to add one."
+                            } else {
+                                "All caught up!"
+                            },
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
                 else -> {
-                    val incompleteTasks = uiState.tasks.filter { !it.isCompleted }
-                    if (incompleteTasks.isEmpty()) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 48.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "All caught up!",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                    nextFlagTask?.let { task ->
+                        DueTaskBanner(
+                            task = task,
+                            onClick = { navController.navigate(Routes.studyTaskEditor(task.taskId)) }
+                        )
+                    }
+
+                    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                        if (overdueTasks.isNotEmpty()) {
+                            TaskTree(
+                                trunkLabel = "Overdue",
+                                trunkColor = MaterialTheme.colorScheme.error,
+                                tasks = overdueTasks,
+                                nowMillis = nowMillis,
+                                onToggle = { task ->
+                                    viewModel.viewModelScope.launch {
+                                        viewModel.toggleCompleted(task)
+                                    }
+                                },
+                                onClick = { task ->
+                                    navController.navigate(Routes.studyTaskEditor(task.taskId))
+                                }
                             )
                         }
-                    } else {
-                        val grouped = incompleteTasks.groupBy { it.dateMillis }
-                        val sortedDates = grouped.keys.sorted()
 
-                        Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                            sortedDates.forEach { dateMillis ->
-                                val tasksForDate = grouped[dateMillis].orEmpty()
-                                if (tasksForDate.isNotEmpty()) {
-                                    DateTree(
-                                        dateMillis = dateMillis,
-                                        tasks = tasksForDate,
-                                        onToggleComplete = { task ->
-                                            viewModel.viewModelScope.launch {
-                                                viewModel.toggleCompleted(task)
-                                            }
-                                        },
-                                        onDeleteClick = { viewModel.setTaskToDelete(it) },
-                                        onEntryClick = {
-                                            navController.navigate(Routes.studyTaskEditor(it.taskId))
-                                        }
-                                    )
+                        if (todayTasks.isNotEmpty()) {
+                            TaskTree(
+                                trunkLabel = "Today",
+                                trunkColor = MaterialTheme.colorScheme.onBackground,
+                                tasks = todayTasks,
+                                nowMillis = nowMillis,
+                                onToggle = { task ->
+                                    viewModel.viewModelScope.launch {
+                                        viewModel.toggleCompleted(task)
+                                    }
+                                },
+                                onClick = { task ->
+                                    navController.navigate(Routes.studyTaskEditor(task.taskId))
                                 }
+                            )
+                        }
+
+                        val grouped = remainingDeadlineTasks
+                            .filter { it.deadlineDateMillis != null }
+                            .groupBy { it.deadlineDateMillis!! }
+                        val sortedDates = grouped.keys.sorted()
+                        sortedDates.forEach { date ->
+                            val tasksForDate = grouped[date].orEmpty()
+                            if (tasksForDate.isNotEmpty()) {
+                                TaskTree(
+                                    trunkLabel = formatDateHeader(date),
+                                    trunkColor = MaterialTheme.colorScheme.onBackground,
+                                    tasks = tasksForDate,
+                                    nowMillis = nowMillis,
+                                    onToggle = { task ->
+                                        viewModel.viewModelScope.launch {
+                                            viewModel.toggleCompleted(task)
+                                        }
+                                    },
+                                    onClick = { task ->
+                                        navController.navigate(Routes.studyTaskEditor(task.taskId))
+                                    }
+                                )
                             }
                         }
-                        Spacer(modifier = Modifier.height(24.dp))
                     }
+
+                    Spacer(modifier = Modifier.height(24.dp))
                 }
             }
         }
     }
+}
 
-    if (uiState.taskToDelete != null) {
-        val task = uiState.taskToDelete!!
-        AlertDialog(
-            onDismissRequest = { viewModel.setTaskToDelete(null) },
-            title = { Text("Delete Task") },
-            text = { Text("Are you sure you want to delete this task?") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.viewModelScope.launch {
-                            viewModel.deleteTask(task)
-                        }
-                    }
-                ) {
-                    Text("Delete")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { viewModel.setTaskToDelete(null) }) {
-                    Text("Cancel")
-                }
-            }
+@Composable
+private fun DueTaskBanner(
+    task: StudyTask,
+    onClick: () -> Unit
+) {
+    val targetMillis = deadlineEpochMillis(task)
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
         )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onClick() }
+                .padding(16.dp)
+        ) {
+            Text(
+                text = "Due Task",
+                style = MaterialTheme.typography.labelMedium
+            )
+            Text(
+                text = task.title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(top = 2.dp)
+            )
+            if (targetMillis != null) {
+                CountdownTimerText(
+                    targetMillis = targetMillis,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+        }
     }
 }
 
 @Composable
-private fun DateTree(
-    dateMillis: Long,
+private fun TaskTree(
+    trunkLabel: String,
+    trunkColor: androidx.compose.ui.graphics.Color,
     tasks: List<StudyTask>,
-    onToggleComplete: (StudyTask) -> Unit,
-    onDeleteClick: (StudyTask) -> Unit,
-    onEntryClick: (StudyTask) -> Unit
+    nowMillis: Long,
+    onToggle: (StudyTask) -> Unit,
+    onClick: (StudyTask) -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
-            text = formatDateHeader(dateMillis),
+            text = trunkLabel,
             style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onBackground,
+            color = trunkColor,
             modifier = Modifier.padding(vertical = 8.dp)
         )
         tasks.forEach { task ->
-            StudyTaskBranch(
+            TaskBranch(
                 task = task,
-                onToggleComplete = { onToggleComplete(task) },
-                onDeleteClick = { onDeleteClick(task) },
-                onClick = { onEntryClick(task) }
+                nowMillis = nowMillis,
+                onToggle = { onToggle(task) },
+                onClick = { onClick(task) }
             )
         }
     }
 }
 
 @Composable
-private fun StudyTaskBranch(
+private fun TaskBranch(
     task: StudyTask,
-    onToggleComplete: () -> Unit,
-    onDeleteClick: () -> Unit,
+    nowMillis: Long,
+    onToggle: () -> Unit,
     onClick: () -> Unit
 ) {
     Row(
@@ -318,7 +436,7 @@ private fun StudyTaskBranch(
             modifier = Modifier
                 .weight(1f)
                 .clickable { onClick() }
-                .padding(vertical = 4.dp)
+                .padding(vertical = 6.dp)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -330,62 +448,29 @@ private fun StudyTaskBranch(
                         .height(2.dp)
                         .background(MaterialTheme.colorScheme.outline)
                 )
-                Spacer(modifier = Modifier.width(4.dp))
-                Checkbox(
-                    checked = false,
-                    onCheckedChange = { onToggleComplete() }
-                )
+                Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = task.title,
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurface,
-                    fontWeight = FontWeight.Medium
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.weight(1f)
+                )
+                Checkbox(
+                    checked = false,
+                    onCheckedChange = { onToggle() },
+                    modifier = Modifier.size(28.dp)
                 )
             }
-            if (task.hasReminder && task.reminderHour != null && task.reminderMinute != null) {
+            val badge = timeLeftBadge(task, nowMillis)
+            if (badge != null && !task.isTodayTask) {
                 Text(
-                    text = "⏰ ${format12Hour(task.reminderHour, task.reminderMinute)}",
+                    text = badge,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 60.dp, top = 2.dp)
+                    modifier = Modifier.padding(start = 20.dp, top = 2.dp)
                 )
             }
         }
-        IconButton(
-            onClick = onDeleteClick,
-            modifier = Modifier.align(Alignment.CenterVertically)
-        ) {
-            Icon(Icons.Default.Delete, contentDescription = "Delete")
-        }
     }
-}
-
-private fun formatDateHeader(dateMillis: Long): String {
-    val today = Calendar.getInstance().apply {
-        set(Calendar.HOUR_OF_DAY, 0)
-        set(Calendar.MINUTE, 0)
-        set(Calendar.SECOND, 0)
-        set(Calendar.MILLISECOND, 0)
-    }
-    val tomorrow = Calendar.getInstance().apply {
-        timeInMillis = today.timeInMillis + (24 * 60 * 60 * 1000L)
-    }
-    val taskDate = Calendar.getInstance().apply { timeInMillis = dateMillis }
-
-    return when {
-        taskDate.get(Calendar.YEAR) == today.get(Calendar.YEAR) &&
-                taskDate.get(Calendar.DAY_OF_YEAR) == today.get(Calendar.DAY_OF_YEAR) -> "Today"
-        taskDate.get(Calendar.YEAR) == tomorrow.get(Calendar.YEAR) &&
-                taskDate.get(Calendar.DAY_OF_YEAR) == tomorrow.get(Calendar.DAY_OF_YEAR) -> "Tomorrow"
-        else -> {
-            val sdf = SimpleDateFormat("EEE, MMM d", Locale.getDefault())
-            sdf.format(Date(dateMillis))
-        }
-    }
-}
-
-private fun format12Hour(hour: Int, minute: Int): String {
-    val displayHour = if (hour == 0) 12 else if (hour > 12) hour - 12 else hour
-    val amPm = if (hour < 12) "AM" else "PM"
-    return String.format("%d:%02d %s", displayHour, minute, amPm)
 }

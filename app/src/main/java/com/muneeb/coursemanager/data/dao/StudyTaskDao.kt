@@ -20,9 +20,15 @@ interface StudyTaskDao {
     @Delete
     suspend fun delete(task: StudyTask)
 
-    @Query("SELECT * FROM study_tasks ORDER BY dateMillis ASC, reminderHour ASC")
+    @Query("SELECT * FROM study_tasks ORDER BY createdDateMillis ASC")
     fun getAll(): Flow<List<StudyTask>>
+
+    @Query("SELECT * FROM study_tasks")
+    suspend fun getAllOnce(): List<StudyTask>
 
     @Query("SELECT * FROM study_tasks WHERE taskId = :taskId")
     suspend fun getById(taskId: Long): StudyTask?
+
+    @Query("DELETE FROM study_tasks WHERE isTodayTask = 1 AND isCompleted = 0 AND createdDateMillis < :todayStartMillis")
+    suspend fun deleteStaleTodayTasks(todayStartMillis: Long)
 }

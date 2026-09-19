@@ -88,7 +88,7 @@ fun AppDrawerContent(
                 semesterLabel to semesterRoute,
                 "Notes" to Routes.NOTES_LIST,
                 "Timetable" to Routes.TIMETABLE_LIST,
-                "Study Schedule" to Routes.STUDY_TASK_LIST
+                "To-Do List" to Routes.STUDY_TASK_LIST
             )
             items.forEach { (label, route) ->
                 NavigationDrawerItem(

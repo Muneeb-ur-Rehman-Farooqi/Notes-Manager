@@ -69,6 +69,7 @@ import com.muneeb.coursemanager.data.entities.TimetableEntry
 import com.muneeb.coursemanager.data.repository.TimetableRepository
 import com.muneeb.coursemanager.navigation.Routes
 import com.muneeb.coursemanager.reminders.ReminderScheduler
+import com.muneeb.coursemanager.ui.components.CountdownTimerText
 import com.muneeb.coursemanager.ui.theme.CopyIcon
 import com.muneeb.coursemanager.ui.util.RequestNotificationPermission
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -503,6 +504,9 @@ fun TimetableListScreen(
 @Composable
 private fun NextClassBanner(entry: TimetableEntry) {
     val context = LocalContext.current
+    val today = Calendar.getInstance().get(Calendar.DAY_OF_WEEK)
+    val isToday = entry.dayOfWeek == today
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -512,54 +516,73 @@ private fun NextClassBanner(entry: TimetableEntry) {
             contentColor = MaterialTheme.colorScheme.onPrimaryContainer
         )
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = "Next class",
-                style = MaterialTheme.typography.labelMedium
-            )
-            Text(
-                text = entry.subjectName,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(top = 2.dp)
-            )
-            val details = entryDetails(entry)
-            val line = if (details.isNotEmpty()) {
-                "${timeRange(entry)} · $details"
-            } else {
-                timeRange(entry)
-            }
-            Text(
-                text = line,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(top = 2.dp)
-            )
-            val link = entry.meetingLink
-            if (!link.isNullOrBlank()) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Next class",
+                    style = MaterialTheme.typography.labelMedium
+                )
+                Text(
+                    text = entry.subjectName,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(top = 2.dp)
-                ) {
-                    Text(
-                        text = "🔗 Join Class",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier
-                            .clickable { openMeetingLink(context, link) }
-                            .padding(vertical = 2.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    IconButton(
-                        onClick = { copyMeetingLink(context, link) },
-                        modifier = Modifier.size(28.dp)
+                )
+                val details = entryDetails(entry)
+                val line = if (details.isNotEmpty()) {
+                    "${timeRange(entry)} · $details"
+                } else {
+                    timeRange(entry)
+                }
+                Text(
+                    text = line,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+                val link = entry.meetingLink
+                if (!link.isNullOrBlank()) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(top = 2.dp)
                     ) {
-                        Icon(
-                            imageVector = CopyIcon,
-                            contentDescription = "Copy link",
-                            modifier = Modifier.size(16.dp)
+                        Text(
+                            text = "🔗 Join Class",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier
+                                .clickable { openMeetingLink(context, link) }
+                                .padding(vertical = 2.dp)
                         )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        IconButton(
+                            onClick = { copyMeetingLink(context, link) },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                imageVector = CopyIcon,
+                                contentDescription = "Copy link",
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
                     }
                 }
+            }
+            if (isToday) {
+                val targetCal = Calendar.getInstance().apply {
+                    set(Calendar.HOUR_OF_DAY, entry.startHour)
+                    set(Calendar.MINUTE, entry.startMinute)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }
+                CountdownTimerText(
+                    targetMillis = targetCal.timeInMillis,
+                    modifier = Modifier.padding(start = 12.dp)
+                )
             }
         }
     }
