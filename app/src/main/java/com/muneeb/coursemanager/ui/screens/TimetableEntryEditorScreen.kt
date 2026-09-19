@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -20,6 +21,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
@@ -63,6 +65,8 @@ data class TimetableEditorUiState(
     val subjectName: String = "",
     val room: String = "",
     val teacher: String = "",
+    val meetingLinkEnabled: Boolean = false,
+    val meetingLink: String = "",
     val error: String? = null,
     val isSaving: Boolean = false
 )
@@ -90,6 +94,7 @@ class TimetableEditorViewModel(
             try {
                 timetableRepository.getById(entryId).collect { entry ->
                     if (entry != null) {
+                        val hasLink = !entry.meetingLink.isNullOrBlank()
                         _uiState.update {
                             it.copy(
                                 isLoading = false,
@@ -101,7 +106,9 @@ class TimetableEditorViewModel(
                                 endMinute = entry.endMinute,
                                 subjectName = entry.subjectName,
                                 room = entry.room ?: "",
-                                teacher = entry.teacher ?: ""
+                                teacher = entry.teacher ?: "",
+                                meetingLinkEnabled = hasLink,
+                                meetingLink = entry.meetingLink ?: ""
                             )
                         }
                     } else {
@@ -157,6 +164,20 @@ class TimetableEditorViewModel(
         _uiState.update { it.copy(teacher = teacher) }
     }
 
+    fun toggleMeetingLink() {
+        _uiState.update { state ->
+            val newEnabled = !state.meetingLinkEnabled
+            state.copy(
+                meetingLinkEnabled = newEnabled,
+                meetingLink = if (!newEnabled) "" else state.meetingLink
+            )
+        }
+    }
+
+    fun updateMeetingLink(link: String) {
+        _uiState.update { it.copy(meetingLink = link) }
+    }
+
     suspend fun saveEntry(): Boolean {
         val state = _uiState.value
         if (state.subjectName.isBlank()) {
@@ -188,7 +209,8 @@ class TimetableEditorViewModel(
                         endMinute = state.endMinute,
                         subjectName = state.subjectName,
                         room = state.room.takeIf { it.isNotBlank() },
-                        teacher = state.teacher.takeIf { it.isNotBlank() }
+                        teacher = state.teacher.takeIf { it.isNotBlank() },
+                        meetingLink = if (state.meetingLinkEnabled) state.meetingLink.takeIf { it.isNotBlank() } else null
                     )
                     val newId = timetableRepository.insert(entry)
                     scheduleReminder(newId, entry)
@@ -204,7 +226,8 @@ class TimetableEditorViewModel(
                     endMinute = state.endMinute,
                     subjectName = state.subjectName,
                     room = state.room.takeIf { it.isNotBlank() },
-                    teacher = state.teacher.takeIf { it.isNotBlank() }
+                    teacher = state.teacher.takeIf { it.isNotBlank() },
+                    meetingLink = if (state.meetingLinkEnabled) state.meetingLink.takeIf { it.isNotBlank() } else null
                 )
                 timetableRepository.update(entry)
                 scheduleReminder(entryId, entry)
@@ -308,8 +331,9 @@ fun TimetableEntryEditorScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(16.dp)
+                .imePadding()
                 .verticalScroll(rememberScrollState())
+                .padding(16.dp)
         ) {
             if (uiState.isLoading) {
                 CircularProgressIndicator()
@@ -423,6 +447,33 @@ fun TimetableEntryEditorScreen(
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
                 )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Switch(
+                        checked = uiState.meetingLinkEnabled,
+                        onCheckedChange = { viewModel.toggleMeetingLink() }
+                    )
+                    Text(
+                        text = "Online class",
+                        modifier = Modifier.padding(start = 8.dp)
+                    )
+                }
+
+                if (uiState.meetingLinkEnabled) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = uiState.meetingLink,
+                        onValueChange = { viewModel.updateMeetingLink(it) },
+                        label = { Text("Meeting Link") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(16.dp))
 

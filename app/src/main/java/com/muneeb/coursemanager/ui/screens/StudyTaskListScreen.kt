@@ -1,16 +1,22 @@
 package com.muneeb.coursemanager.ui.screens
 
 import android.app.Application
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
@@ -36,7 +42,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -131,7 +137,7 @@ fun StudyTaskListScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
-    RequestNotificationPermission { /* handle result if needed */ }
+    RequestNotificationPermission { }
 
     Scaffold(
         topBar = {
@@ -156,65 +162,80 @@ fun StudyTaskListScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
+                .verticalScroll(rememberScrollState())
         ) {
-            if (uiState.isLoading && uiState.tasks.isEmpty()) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator()
+            when {
+                uiState.isLoading && uiState.tasks.isEmpty() -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 48.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator()
+                    }
                 }
-            } else if (uiState.error != null && uiState.tasks.isEmpty()) {
-                Text(
-                    text = "Error: ${uiState.error}",
-                    modifier = Modifier.padding(16.dp),
-                    color = MaterialTheme.colorScheme.error
-                )
-            } else if (uiState.tasks.isEmpty()) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
+                uiState.error != null && uiState.tasks.isEmpty() -> {
                     Text(
-                        text = "No study tasks.\nTap + to add one.",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = "Error: ${uiState.error}",
+                        modifier = Modifier.padding(16.dp),
+                        color = MaterialTheme.colorScheme.error
                     )
                 }
-            } else {
-                val grouped = uiState.tasks.groupBy { it.dateMillis }
-                val sortedDates = grouped.keys.sorted()
-
-                LazyColumn(
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    sortedDates.forEach { dateMillis ->
-                        val tasksForDate = grouped[dateMillis] ?: emptyList()
-                        item {
+                uiState.tasks.isEmpty() -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 48.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "No study tasks.\nTap + to add one.",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                else -> {
+                    val incompleteTasks = uiState.tasks.filter { !it.isCompleted }
+                    if (incompleteTasks.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 48.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
                             Text(
-                                text = formatDateHeader(dateMillis),
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onBackground,
-                                modifier = Modifier.padding(vertical = 8.dp)
+                                text = "All caught up!",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-                        items(tasksForDate) { task ->
-                            StudyTaskRow(
-                                task = task,
-                                onToggleCompleted = {
-                                    viewModel.viewModelScope.launch {
-                                        viewModel.toggleCompleted(task)
-                                    }
-                                },
-                                onDeleteClick = {
-                                    viewModel.setTaskToDelete(task)
-                                },
-                                onEditClick = {
-                                    navController.navigate(Routes.studyTaskEditor(task.taskId))
+                    } else {
+                        val grouped = incompleteTasks.groupBy { it.dateMillis }
+                        val sortedDates = grouped.keys.sorted()
+
+                        Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                            sortedDates.forEach { dateMillis ->
+                                val tasksForDate = grouped[dateMillis].orEmpty()
+                                if (tasksForDate.isNotEmpty()) {
+                                    DateTree(
+                                        dateMillis = dateMillis,
+                                        tasks = tasksForDate,
+                                        onToggleComplete = { task ->
+                                            viewModel.viewModelScope.launch {
+                                                viewModel.toggleCompleted(task)
+                                            }
+                                        },
+                                        onDeleteClick = { viewModel.setTaskToDelete(it) },
+                                        onEntryClick = {
+                                            navController.navigate(Routes.studyTaskEditor(it.taskId))
+                                        }
+                                    )
                                 }
-                            )
+                            }
                         }
+                        Spacer(modifier = Modifier.height(24.dp))
                     }
                 }
             }
@@ -222,6 +243,7 @@ fun StudyTaskListScreen(
     }
 
     if (uiState.taskToDelete != null) {
+        val task = uiState.taskToDelete!!
         AlertDialog(
             onDismissRequest = { viewModel.setTaskToDelete(null) },
             title = { Text("Delete Task") },
@@ -230,7 +252,7 @@ fun StudyTaskListScreen(
                 TextButton(
                     onClick = {
                         viewModel.viewModelScope.launch {
-                            viewModel.deleteTask(uiState.taskToDelete!!)
+                            viewModel.deleteTask(task)
                         }
                     }
                 ) {
@@ -247,55 +269,93 @@ fun StudyTaskListScreen(
 }
 
 @Composable
-private fun StudyTaskRow(
-    task: StudyTask,
-    onToggleCompleted: () -> Unit,
-    onDeleteClick: () -> Unit,
-    onEditClick: () -> Unit
+private fun DateTree(
+    dateMillis: Long,
+    tasks: List<StudyTask>,
+    onToggleComplete: (StudyTask) -> Unit,
+    onDeleteClick: (StudyTask) -> Unit,
+    onEntryClick: (StudyTask) -> Unit
 ) {
-    Card(
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = formatDateHeader(dateMillis),
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier.padding(vertical = 8.dp)
+        )
+        tasks.forEach { task ->
+            StudyTaskBranch(
+                task = task,
+                onToggleComplete = { onToggleComplete(task) },
+                onDeleteClick = { onDeleteClick(task) },
+                onClick = { onEntryClick(task) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun StudyTaskBranch(
+    task: StudyTask,
+    onToggleComplete: () -> Unit,
+    onDeleteClick: () -> Unit,
+    onClick: () -> Unit
+) {
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(4.dp),
-        onClick = onEditClick
+            .height(IntrinsicSize.Min),
+        verticalAlignment = Alignment.Top
     ) {
-        Row(
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+                .width(2.dp)
+                .fillMaxHeight()
+                .background(MaterialTheme.colorScheme.outline)
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .clickable { onClick() }
+                .padding(vertical = 4.dp)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Start
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Checkbox(
-                    checked = task.isCompleted,
-                    onCheckedChange = { onToggleCompleted() }
+                Box(
+                    modifier = Modifier
+                        .width(12.dp)
+                        .height(2.dp)
+                        .background(MaterialTheme.colorScheme.outline)
                 )
-                Column(
-                    modifier = Modifier.padding(start = 8.dp)
-                ) {
-                    Text(
-                        text = task.title,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        textDecoration = if (task.isCompleted) TextDecoration.LineThrough else null
-                    )
-                    if (task.hasReminder) {
-                        val timeStr = format12Hour(task.reminderHour ?: 0, task.reminderMinute ?: 0)
-                        Text(
-                            text = "⏰ $timeStr",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
+                Spacer(modifier = Modifier.width(4.dp))
+                Checkbox(
+                    checked = false,
+                    onCheckedChange = { onToggleComplete() }
+                )
+                Text(
+                    text = task.title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Medium
+                )
             }
-            IconButton(onClick = onDeleteClick) {
-                Icon(Icons.Default.Delete, contentDescription = "Delete")
+            if (task.hasReminder && task.reminderHour != null && task.reminderMinute != null) {
+                Text(
+                    text = "⏰ ${format12Hour(task.reminderHour, task.reminderMinute)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 60.dp, top = 2.dp)
+                )
             }
+        }
+        IconButton(
+            onClick = onDeleteClick,
+            modifier = Modifier.align(Alignment.CenterVertically)
+        ) {
+            Icon(Icons.Default.Delete, contentDescription = "Delete")
         }
     }
 }
