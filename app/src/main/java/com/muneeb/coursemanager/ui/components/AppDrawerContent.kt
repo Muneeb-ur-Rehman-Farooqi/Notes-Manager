@@ -40,7 +40,8 @@ fun AppDrawerContent(
     onPaletteSelected: (ThemePalette) -> Unit,
     onToggleDarkMode: (Boolean) -> Unit,
     onItemClick: () -> Unit,
-    onPromoteClick: () -> Unit
+    onPromoteClick: () -> Unit,
+    onTransferClick: () -> Unit
 ) {
     ModalDrawerSheet(
         modifier = Modifier.fillMaxWidth(0.75f)
@@ -164,14 +165,26 @@ fun AppDrawerContent(
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
-            if (educationLevel != null && educationLevel != "UNIVERSITY") {
-                Button(
-                    onClick = onPromoteClick,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp)
-                ) {
-                    Text("Promote to Next Level")
+            when {
+                educationLevel != null && educationLevel != "UNIVERSITY" -> {
+                    Button(
+                        onClick = onPromoteClick,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp)
+                    ) {
+                        Text("Promote to Next Level")
+                    }
+                }
+                educationLevel == "UNIVERSITY" -> {
+                    Button(
+                        onClick = onTransferClick,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp)
+                    ) {
+                        Text("Change Major")
+                    }
                 }
             }
 

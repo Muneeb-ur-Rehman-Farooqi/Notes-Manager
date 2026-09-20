@@ -228,6 +228,7 @@ fun AppContent(
 
     var showPromotionWarning by remember { mutableStateOf(false) }
     var showPromotionSuccess by remember { mutableStateOf(false) }
+    var showTransferWarning by remember { mutableStateOf(false) }
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -262,6 +263,12 @@ fun AppContent(
                         drawerState.close()
                     }
                     showPromotionWarning = true
+                },
+                onTransferClick = {
+                    scope.launch {
+                        drawerState.close()
+                    }
+                    showTransferWarning = true
                 }
             )
         }
@@ -355,6 +362,33 @@ fun AppContent(
             confirmButton = {
                 TextButton(onClick = { showPromotionSuccess = false }) {
                     Text("OK")
+                }
+            }
+        )
+    }
+
+    if (showTransferWarning) {
+        AlertDialog(
+            onDismissRequest = { showTransferWarning = false },
+            title = { Text("Change Major") },
+            text = {
+                Text("This will let you set a new major or degree. Your current courses and folders stay saved, but won't be shown until you transfer back.")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showTransferWarning = false
+                        onboardingViewModel.resetForNewFlow()
+                        onboardingViewModel.setEducationLevel("UNIVERSITY")
+                        navController.navigate(Routes.UNIVERSITY_MAJOR)
+                    }
+                ) {
+                    Text("Confirm")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showTransferWarning = false }) {
+                    Text("Cancel")
                 }
             }
         )
