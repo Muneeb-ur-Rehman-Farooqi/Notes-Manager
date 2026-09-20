@@ -7,6 +7,7 @@ import androidx.room.PrimaryKey
 data class TimetableEntry(
     @PrimaryKey(autoGenerate = true)
     val entryId: Long = 0,
+    val groupId: String,
     val dayOfWeek: Int,
     val startHour: Int,
     val startMinute: Int,

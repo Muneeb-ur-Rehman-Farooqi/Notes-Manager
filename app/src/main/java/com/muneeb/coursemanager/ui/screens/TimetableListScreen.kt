@@ -177,8 +177,8 @@ private fun timeRange(entry: TimetableEntry): String =
 
 private fun entryDetails(entry: TimetableEntry): String {
     val details = mutableListOf<String>()
-    entry.room?.let { details.add("Room $it") }
-    entry.teacher?.let { details.add(it) }
+    entry.room?.takeIf { it.isNotBlank() }?.let { details.add(it) }
+    entry.teacher?.takeIf { it.isNotBlank() }?.let { details.add(it) }
     return details.joinToString(" · ")
 }
 

@@ -41,15 +41,10 @@ class BootReceiver : BroadcastReceiver() {
             )
             val title = entry.subjectName
             val baseBody = buildString {
-                if (entry.room != null && entry.teacher != null) {
-                    append("${entry.room} · ${entry.teacher}")
-                } else if (entry.room != null) {
-                    append("Room ${entry.room}")
-                } else if (entry.teacher != null) {
-                    append("Teacher ${entry.teacher}")
-                } else {
-                    append("Class starting soon")
-                }
+                val parts = mutableListOf<String>()
+                entry.room?.takeIf { it.isNotBlank() }?.let { parts.add(it) }
+                entry.teacher?.takeIf { it.isNotBlank() }?.let { parts.add(it) }
+                if (parts.isEmpty()) append("Class starting soon") else append(parts.joinToString(" · "))
             }
             val body = if (userName != null) "Hey $userName, $baseBody" else baseBody
             ReminderScheduler.scheduleExactReminder(

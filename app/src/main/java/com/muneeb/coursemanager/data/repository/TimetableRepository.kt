@@ -11,6 +11,9 @@ class TimetableRepository(
 
     fun getById(entryId: Long): Flow<TimetableEntry?> = timetableDao.getById(entryId)
 
+    suspend fun getByGroupId(groupId: String): List<TimetableEntry> =
+        timetableDao.getByGroupId(groupId)
+
     suspend fun insert(entry: TimetableEntry): Long = timetableDao.insert(entry)
 
     suspend fun update(entry: TimetableEntry) = timetableDao.update(entry)

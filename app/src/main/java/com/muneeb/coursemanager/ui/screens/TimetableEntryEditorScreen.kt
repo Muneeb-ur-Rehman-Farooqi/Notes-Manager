@@ -15,8 +15,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -48,15 +46,18 @@ import com.muneeb.coursemanager.reminders.ReminderScheduler
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.Calendar
+import java.util.UUID
 
 data class TimetableEditorUiState(
     val isLoading: Boolean = false,
     val isNewEntry: Boolean = true,
-    val dayOfWeek: Int = Calendar.MONDAY,
+    val originalGroupId: String? = null,
+    val originalEntries: List<TimetableEntry> = emptyList(),
     val selectedDays: Set<Int> = emptySet(),
     val startHour: Int = 9,
     val startMinute: Int = 0,
@@ -92,37 +93,35 @@ class TimetableEditorViewModel(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
             try {
-                timetableRepository.getById(entryId).collect { entry ->
-                    if (entry != null) {
-                        val hasLink = !entry.meetingLink.isNullOrBlank()
-                        _uiState.update {
-                            it.copy(
-                                isLoading = false,
-                                isNewEntry = false,
-                                dayOfWeek = entry.dayOfWeek,
-                                startHour = entry.startHour,
-                                startMinute = entry.startMinute,
-                                endHour = entry.endHour,
-                                endMinute = entry.endMinute,
-                                subjectName = entry.subjectName,
-                                room = entry.room ?: "",
-                                teacher = entry.teacher ?: "",
-                                meetingLinkEnabled = hasLink,
-                                meetingLink = entry.meetingLink ?: ""
-                            )
-                        }
-                    } else {
-                        _uiState.update { it.copy(error = "Entry not found", isLoading = false) }
-                    }
+                val entry = timetableRepository.getById(entryId).first()
+                if (entry == null) {
+                    _uiState.update { it.copy(error = "Entry not found", isLoading = false) }
+                    return@launch
+                }
+                val group = timetableRepository.getByGroupId(entry.groupId)
+                val hasLink = !entry.meetingLink.isNullOrBlank()
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        isNewEntry = false,
+                        originalGroupId = entry.groupId,
+                        originalEntries = group,
+                        selectedDays = group.map { e -> e.dayOfWeek }.toSet(),
+                        startHour = entry.startHour,
+                        startMinute = entry.startMinute,
+                        endHour = entry.endHour,
+                        endMinute = entry.endMinute,
+                        subjectName = entry.subjectName,
+                        room = entry.room ?: "",
+                        teacher = entry.teacher ?: "",
+                        meetingLinkEnabled = hasLink,
+                        meetingLink = entry.meetingLink ?: ""
+                    )
                 }
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = e.message, isLoading = false) }
             }
         }
-    }
-
-    fun updateDayOfWeek(day: Int) {
-        _uiState.update { it.copy(dayOfWeek = day) }
     }
 
     fun toggleDaySelection(day: Int) {
@@ -190,18 +189,25 @@ class TimetableEditorViewModel(
             _uiState.update { it.copy(error = "End time must be after start time") }
             return false
         }
+        if (state.selectedDays.isEmpty()) {
+            _uiState.update { it.copy(error = "Select at least one day") }
+            return false
+        }
 
         _uiState.update { it.copy(isSaving = true, error = null) }
         try {
+            val resolvedLink = if (state.meetingLinkEnabled) {
+                state.meetingLink.takeIf { it.isNotBlank() }
+            } else {
+                null
+            }
+
             if (state.isNewEntry) {
-                val selectedDays = state.selectedDays
-                if (selectedDays.isEmpty()) {
-                    _uiState.update { it.copy(error = "Select at least one day", isSaving = false) }
-                    return false
-                }
-                for (day in selectedDays) {
+                val groupId = UUID.randomUUID().toString()
+                for (day in state.selectedDays) {
                     val entry = TimetableEntry(
                         entryId = 0,
+                        groupId = groupId,
                         dayOfWeek = day,
                         startHour = state.startHour,
                         startMinute = state.startMinute,
@@ -210,27 +216,61 @@ class TimetableEditorViewModel(
                         subjectName = state.subjectName,
                         room = state.room.takeIf { it.isNotBlank() },
                         teacher = state.teacher.takeIf { it.isNotBlank() },
-                        meetingLink = if (state.meetingLinkEnabled) state.meetingLink.takeIf { it.isNotBlank() } else null
+                        meetingLink = resolvedLink
                     )
                     val newId = timetableRepository.insert(entry)
                     scheduleReminder(newId, entry)
                 }
             } else {
-                ReminderScheduler.cancelReminder(application, entryId.toInt())
-                val entry = TimetableEntry(
-                    entryId = entryId,
-                    dayOfWeek = state.dayOfWeek,
-                    startHour = state.startHour,
-                    startMinute = state.startMinute,
-                    endHour = state.endHour,
-                    endMinute = state.endMinute,
-                    subjectName = state.subjectName,
-                    room = state.room.takeIf { it.isNotBlank() },
-                    teacher = state.teacher.takeIf { it.isNotBlank() },
-                    meetingLink = if (state.meetingLinkEnabled) state.meetingLink.takeIf { it.isNotBlank() } else null
-                )
-                timetableRepository.update(entry)
-                scheduleReminder(entryId, entry)
+                val groupId = state.originalGroupId
+                if (groupId == null) {
+                    _uiState.update { it.copy(error = "Missing group id", isSaving = false) }
+                    return false
+                }
+                val originalByDay = state.originalEntries.associateBy { it.dayOfWeek }
+                val originalDays = originalByDay.keys
+                val newDays = state.selectedDays
+
+                for (day in newDays.intersect(originalDays)) {
+                    val existing = originalByDay[day] ?: continue
+                    ReminderScheduler.cancelReminder(application, existing.entryId.toInt())
+                    val updated = existing.copy(
+                        startHour = state.startHour,
+                        startMinute = state.startMinute,
+                        endHour = state.endHour,
+                        endMinute = state.endMinute,
+                        subjectName = state.subjectName,
+                        room = state.room.takeIf { it.isNotBlank() },
+                        teacher = state.teacher.takeIf { it.isNotBlank() },
+                        meetingLink = resolvedLink
+                    )
+                    timetableRepository.update(updated)
+                    scheduleReminder(existing.entryId, updated)
+                }
+
+                for (day in originalDays - newDays) {
+                    val existing = originalByDay[day] ?: continue
+                    ReminderScheduler.cancelReminder(application, existing.entryId.toInt())
+                    timetableRepository.delete(existing)
+                }
+
+                for (day in newDays - originalDays) {
+                    val entry = TimetableEntry(
+                        entryId = 0,
+                        groupId = groupId,
+                        dayOfWeek = day,
+                        startHour = state.startHour,
+                        startMinute = state.startMinute,
+                        endHour = state.endHour,
+                        endMinute = state.endMinute,
+                        subjectName = state.subjectName,
+                        room = state.room.takeIf { it.isNotBlank() },
+                        teacher = state.teacher.takeIf { it.isNotBlank() },
+                        meetingLink = resolvedLink
+                    )
+                    val newId = timetableRepository.insert(entry)
+                    scheduleReminder(newId, entry)
+                }
             }
             _uiState.update { it.copy(isSaving = false) }
             return true
@@ -251,15 +291,10 @@ class TimetableEditorViewModel(
         )
         val title = entry.subjectName
         val baseBody = buildString {
-            if (entry.room != null && entry.teacher != null) {
-                append("${entry.room} · ${entry.teacher}")
-            } else if (entry.room != null) {
-                append("Room ${entry.room}")
-            } else if (entry.teacher != null) {
-                append("Teacher ${entry.teacher}")
-            } else {
-                append("Class starting soon")
-            }
+            val parts = mutableListOf<String>()
+            entry.room?.takeIf { it.isNotBlank() }?.let { parts.add(it) }
+            entry.teacher?.takeIf { it.isNotBlank() }?.let { parts.add(it) }
+            if (parts.isEmpty()) append("Class starting soon") else append(parts.joinToString(" · "))
         }
         val body = if (name != null) "Hey $name, $baseBody" else baseBody
         ReminderScheduler.scheduleExactReminder(
@@ -318,7 +353,7 @@ fun TimetableEntryEditorScreen(
 
     val isValid = uiState.subjectName.isNotBlank() &&
             (uiState.endHour * 60 + uiState.endMinute) > (uiState.startHour * 60 + uiState.startMinute) &&
-            (if (uiState.isNewEntry) uiState.selectedDays.isNotEmpty() else true)
+            uiState.selectedDays.isNotEmpty()
 
     Scaffold(
         topBar = {
@@ -348,51 +383,21 @@ fun TimetableEntryEditorScreen(
                     "Sunday" to Calendar.SUNDAY
                 )
 
-                if (uiState.isNewEntry) {
-                    Text("Select days", style = MaterialTheme.typography.bodyLarge)
-                    dayNames.forEach { (name, value) ->
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Start,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Checkbox(
-                                checked = uiState.selectedDays.contains(value),
-                                onCheckedChange = { viewModel.toggleDaySelection(value) }
-                            )
-                            Text(name, modifier = Modifier.padding(start = 8.dp))
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                } else {
-                    var dayDropdownExpanded by remember { mutableStateOf(false) }
-                    val currentDayName = dayNames.find { it.second == uiState.dayOfWeek }?.first ?: "Select Day"
-                    OutlinedTextField(
-                        value = currentDayName,
-                        onValueChange = { },
-                        label = { Text("Day") },
-                        readOnly = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        trailingIcon = {
-                            TextButton(onClick = { dayDropdownExpanded = true }) { Text("▼") }
-                        }
-                    )
-                    DropdownMenu(
-                        expanded = dayDropdownExpanded,
-                        onDismissRequest = { dayDropdownExpanded = false }
+                Text("Select days", style = MaterialTheme.typography.bodyLarge)
+                dayNames.forEach { (name, value) ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Start,
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        dayNames.forEach { (name, value) ->
-                            DropdownMenuItem(
-                                text = { Text(name) },
-                                onClick = {
-                                    viewModel.updateDayOfWeek(value)
-                                    dayDropdownExpanded = false
-                                }
-                            )
-                        }
+                        Checkbox(
+                            checked = uiState.selectedDays.contains(value),
+                            onCheckedChange = { viewModel.toggleDaySelection(value) }
+                        )
+                        Text(name, modifier = Modifier.padding(start = 8.dp))
                     }
-                    Spacer(modifier = Modifier.height(16.dp))
                 }
+                Spacer(modifier = Modifier.height(8.dp))
 
                 OutlinedTextField(
                     value = format12Hour(uiState.startHour, uiState.startMinute),

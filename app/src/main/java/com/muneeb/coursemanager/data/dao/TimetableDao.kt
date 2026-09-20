@@ -31,4 +31,7 @@ interface TimetableDao {
 
     @Query("SELECT * FROM timetable_entries WHERE entryId = :entryId")
     fun getById(entryId: Long): Flow<TimetableEntry?>
+
+    @Query("SELECT * FROM timetable_entries WHERE groupId = :groupId")
+    suspend fun getByGroupId(groupId: String): List<TimetableEntry>
 }
