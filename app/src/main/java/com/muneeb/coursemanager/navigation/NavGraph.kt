@@ -39,6 +39,8 @@ import com.muneeb.coursemanager.ui.screens.ItemListScreen
 import com.muneeb.coursemanager.ui.screens.ItemListViewModel
 import com.muneeb.coursemanager.ui.screens.NoteEditorScreen
 import com.muneeb.coursemanager.ui.screens.NoteEditorViewModel
+import com.muneeb.coursemanager.ui.screens.NoteViewerScreen
+import com.muneeb.coursemanager.ui.screens.NoteViewerViewModel
 import com.muneeb.coursemanager.ui.screens.NotesListScreen
 import com.muneeb.coursemanager.ui.screens.NotesListViewModel
 import com.muneeb.coursemanager.ui.screens.PdfViewerScreen
@@ -47,6 +49,8 @@ import com.muneeb.coursemanager.ui.screens.PhotoGroupViewerScreen
 import com.muneeb.coursemanager.ui.screens.PhotoGroupViewerViewModel
 import com.muneeb.coursemanager.ui.screens.QuickNoteEditorScreen
 import com.muneeb.coursemanager.ui.screens.QuickNoteEditorViewModel
+import com.muneeb.coursemanager.ui.screens.QuickNoteViewerScreen
+import com.muneeb.coursemanager.ui.screens.QuickNoteViewerViewModel
 import com.muneeb.coursemanager.ui.screens.SemesterListScreen
 import com.muneeb.coursemanager.ui.screens.SemesterListViewModel
 import com.muneeb.coursemanager.ui.screens.StudyTaskEditorScreen
@@ -171,12 +175,28 @@ fun AppNavHost(
 
         composable(
             route = Routes.NOTE_EDITOR,
-            arguments = listOf(navArgument("categoryId") { type = NavType.LongType })
+            arguments = listOf(
+                navArgument("categoryId") { type = NavType.LongType },
+                navArgument("itemId") {
+                    type = NavType.LongType
+                    defaultValue = -1L
+                }
+            )
         ) { backStackEntry ->
             val categoryId = backStackEntry.arguments?.getLong("categoryId") ?: 0L
-            val factory = NoteEditorViewModel.Factory(itemRepository, categoryId)
+            val itemId = backStackEntry.arguments?.getLong("itemId") ?: -1L
+            val factory = NoteEditorViewModel.Factory(itemRepository, categoryId, itemId)
             val noteViewModel: NoteEditorViewModel = viewModel(factory = factory)
             NoteEditorScreen(navController = navController, viewModel = noteViewModel)
+        }
+        composable(
+            route = Routes.NOTE_VIEWER_ITEM,
+            arguments = listOf(navArgument("itemId") { type = NavType.LongType })
+        ) { backStackEntry ->
+            val itemId = backStackEntry.arguments?.getLong("itemId") ?: 0L
+            val factory = NoteViewerViewModel.Factory(itemRepository, itemId)
+            val viewerViewModel: NoteViewerViewModel = viewModel(factory = factory)
+            NoteViewerScreen(navController = navController, viewModel = viewerViewModel)
         }
         composable(
             route = Routes.QUICK_NOTE_EDITOR,
@@ -186,6 +206,15 @@ fun AppNavHost(
             val factory = QuickNoteEditorViewModel.Factory(quickNoteRepository, noteId)
             val editorViewModel: QuickNoteEditorViewModel = viewModel(factory = factory)
             QuickNoteEditorScreen(navController = navController, viewModel = editorViewModel)
+        }
+        composable(
+            route = Routes.NOTE_VIEWER,
+            arguments = listOf(navArgument("noteId") { type = NavType.LongType })
+        ) { backStackEntry ->
+            val noteId = backStackEntry.arguments?.getLong("noteId") ?: 0L
+            val factory = QuickNoteViewerViewModel.Factory(quickNoteRepository, noteId)
+            val viewerViewModel: QuickNoteViewerViewModel = viewModel(factory = factory)
+            QuickNoteViewerScreen(navController = navController, viewModel = viewerViewModel)
         }
         composable(
             route = Routes.TIMETABLE_EDITOR,

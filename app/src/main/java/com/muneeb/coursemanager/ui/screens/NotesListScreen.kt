@@ -1,5 +1,6 @@
 package com.muneeb.coursemanager.ui.screens
 
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,16 +13,20 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -55,8 +60,7 @@ import java.util.Locale
 data class NotesListUiState(
     val notes: List<QuickNote> = emptyList(),
     val isLoading: Boolean = true,
-    val error: String? = null,
-    val noteToDelete: QuickNote? = null
+    val error: String? = null
 )
 
 class NotesListViewModel(
@@ -82,17 +86,25 @@ class NotesListViewModel(
         }
     }
 
-    suspend fun deleteNote(note: QuickNote) {
+    suspend fun renameNote(note: QuickNote, newTitle: String) {
         try {
-            quickNoteRepository.delete(note)
+            quickNoteRepository.update(
+                note.copy(
+                    title = newTitle,
+                    updatedAt = System.currentTimeMillis()
+                )
+            )
         } catch (e: Exception) {
-            _uiState.update { it.copy(error = "Failed to delete note: ${e.message}") }
+            _uiState.update { it.copy(error = "Failed to rename note: ${e.message}") }
         }
-        _uiState.update { it.copy(noteToDelete = null) }
     }
 
-    fun setNoteToDelete(note: QuickNote?) {
-        _uiState.update { it.copy(noteToDelete = note) }
+    suspend fun deleteNotes(notes: List<QuickNote>) {
+        try {
+            notes.forEach { quickNoteRepository.delete(it) }
+        } catch (e: Exception) {
+            _uiState.update { it.copy(error = "Failed to delete notes: ${e.message}") }
+        }
     }
 
     class Factory(
@@ -116,17 +128,51 @@ fun NotesListScreen(
     onMenuClick: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    var selectedNoteIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
+    val isSelectionMode = selectedNoteIds.isNotEmpty()
+    var renameTarget by remember { mutableStateOf<QuickNote?>(null) }
+    var renameText by remember { mutableStateOf("") }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Notes") },
-                navigationIcon = {
-                    IconButton(onClick = onMenuClick) {
-                        Icon(Icons.Default.Menu, contentDescription = "Menu")
+            if (isSelectionMode) {
+                TopAppBar(
+                    title = { Text("${selectedNoteIds.size} selected") },
+                    navigationIcon = {
+                        IconButton(onClick = { selectedNoteIds = emptySet() }) {
+                            Icon(Icons.Default.Close, contentDescription = "Exit selection")
+                        }
+                    },
+                    actions = {
+                        val singleSelected = if (selectedNoteIds.size == 1) {
+                            uiState.notes.firstOrNull { it.noteId == selectedNoteIds.first() }
+                        } else null
+                        if (singleSelected != null) {
+                            IconButton(
+                                onClick = {
+                                    renameTarget = singleSelected
+                                    renameText = singleSelected.title ?: ""
+                                }
+                            ) {
+                                Icon(Icons.Default.Edit, contentDescription = "Rename")
+                            }
+                        }
+                        IconButton(onClick = { showDeleteConfirm = true }) {
+                            Icon(Icons.Default.Delete, contentDescription = "Delete")
+                        }
                     }
-                }
-            )
+                )
+            } else {
+                TopAppBar(
+                    title = { Text("Notes") },
+                    navigationIcon = {
+                        IconButton(onClick = onMenuClick) {
+                            Icon(Icons.Default.Menu, contentDescription = "Menu")
+                        }
+                    }
+                )
+            }
         },
         floatingActionButton = {
             ExtendedFloatingActionButton(
@@ -173,11 +219,23 @@ fun NotesListScreen(
                     items(uiState.notes) { note ->
                         NoteCard(
                             note = note,
+                            isSelectionMode = isSelectionMode,
+                            isSelected = selectedNoteIds.contains(note.noteId),
                             onClick = {
-                                navController.navigate(Routes.quickNoteEditor(note.noteId))
+                                if (isSelectionMode) {
+                                    selectedNoteIds = if (selectedNoteIds.contains(note.noteId)) {
+                                        selectedNoteIds - note.noteId
+                                    } else {
+                                        selectedNoteIds + note.noteId
+                                    }
+                                } else {
+                                    navController.navigate(Routes.noteViewer(note.noteId))
+                                }
                             },
-                            onDeleteClick = {
-                                viewModel.setNoteToDelete(note)
+                            onLongClick = {
+                                if (!isSelectionMode) {
+                                    selectedNoteIds = setOf(note.noteId)
+                                }
                             }
                         )
                     }
@@ -186,17 +244,54 @@ fun NotesListScreen(
         }
     }
 
-    val noteToDelete = uiState.noteToDelete
-    if (noteToDelete != null) {
+    val currentRenameTarget = renameTarget
+    if (currentRenameTarget != null) {
         AlertDialog(
-            onDismissRequest = { viewModel.setNoteToDelete(null) },
-            title = { Text("Delete Note") },
-            text = { Text("Are you sure you want to delete this note?") },
+            onDismissRequest = { renameTarget = null },
+            title = { Text("Rename") },
+            text = {
+                OutlinedTextField(
+                    value = renameText,
+                    onValueChange = { renameText = it },
+                    label = { Text("Title") },
+                    singleLine = true
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = renameText.isNotBlank(),
+                    onClick = {
+                        viewModel.viewModelScope.launch {
+                            viewModel.renameNote(currentRenameTarget, renameText.trim())
+                            renameTarget = null
+                            selectedNoteIds = emptySet()
+                        }
+                    }
+                ) {
+                    Text("Confirm")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { renameTarget = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("Delete") },
+            text = { Text("Are you sure you want to delete ${selectedNoteIds.size} note(s)?") },
             confirmButton = {
                 TextButton(
                     onClick = {
+                        val toDelete = uiState.notes.filter { selectedNoteIds.contains(it.noteId) }
                         viewModel.viewModelScope.launch {
-                            viewModel.deleteNote(noteToDelete)
+                            viewModel.deleteNotes(toDelete)
+                            selectedNoteIds = emptySet()
+                            showDeleteConfirm = false
                         }
                     }
                 ) {
@@ -204,7 +299,7 @@ fun NotesListScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { viewModel.setNoteToDelete(null) }) {
+                TextButton(onClick = { showDeleteConfirm = false }) {
                     Text("Cancel")
                 }
             }
@@ -215,21 +310,33 @@ fun NotesListScreen(
 @Composable
 private fun NoteCard(
     note: QuickNote,
+    isSelectionMode: Boolean,
+    isSelected: Boolean,
     onClick: () -> Unit,
-    onDeleteClick: () -> Unit
+    onLongClick: () -> Unit
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(4.dp),
-        onClick = onClick
+            .padding(4.dp)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick
+            )
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
+            verticalAlignment = Alignment.CenterVertically
         ) {
+            if (isSelectionMode) {
+                Checkbox(
+                    checked = isSelected,
+                    onCheckedChange = null,
+                    modifier = Modifier.padding(end = 8.dp)
+                )
+            }
             Column(
                 modifier = Modifier.weight(1f)
             ) {
@@ -245,9 +352,6 @@ private fun NoteCard(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-            }
-            IconButton(onClick = onDeleteClick) {
-                Icon(Icons.Default.Delete, contentDescription = "Delete")
             }
         }
     }

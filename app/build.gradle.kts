@@ -42,4 +42,5 @@ dependencies {
     implementation("io.github.oothp:android-pdf-viewer:3.2.0-beta06")
     implementation("io.coil-kt.coil3:coil-compose:3.5.0")
     implementation("androidx.compose.material:material-icons-core")
+    implementation("io.noties.markwon:core:4.6.2")
 }

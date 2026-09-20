@@ -406,7 +406,9 @@ fun ItemListScreen(
                                             }
                                         }
                                     }
-                                    else -> { /* NOTE handled elsewhere */ }
+                                    ItemType.NOTE -> {
+                                        navController.navigate(Routes.noteViewerItem(item.itemId))
+                                    }
                                 }
                             },
                             onToggleSelect = {

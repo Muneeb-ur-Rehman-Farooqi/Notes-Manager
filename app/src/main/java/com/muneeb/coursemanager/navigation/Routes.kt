@@ -15,11 +15,13 @@ object Routes {
     const val COURSE_LIST = "course_list/{semesterId}"
     const val CATEGORY_LIST = "category_list/{courseId}"
     const val ITEM_LIST = "item_list/{categoryId}"
-    const val NOTE_EDITOR = "note_editor/{categoryId}"
+    const val NOTE_EDITOR = "note_editor/{categoryId}?itemId={itemId}"
+    const val NOTE_VIEWER_ITEM = "note_viewer_item/{itemId}"
 
     // Quick Notes
     const val NOTES_LIST = "notes_list"
     const val QUICK_NOTE_EDITOR = "quick_note_editor?noteId={noteId}"
+    const val NOTE_VIEWER = "note_viewer/{noteId}"
 
     // Timetable
     const val TIMETABLE_LIST = "timetable_list"
@@ -39,8 +41,10 @@ object Routes {
     fun courseList(semesterId: Long) = "course_list/$semesterId"
     fun categoryList(courseId: Long) = "category_list/$courseId"
     fun itemList(categoryId: Long) = "item_list/$categoryId"
-    fun noteEditor(categoryId: Long) = "note_editor/$categoryId"
+    fun noteEditor(categoryId: Long, itemId: Long = -1L) = "note_editor/$categoryId?itemId=$itemId"
+    fun noteViewerItem(itemId: Long) = "note_viewer_item/$itemId"
     fun quickNoteEditor(noteId: Long = -1L) = "quick_note_editor?noteId=$noteId"
+    fun noteViewer(noteId: Long) = "note_viewer/$noteId"
     fun timetableEditor(entryId: Long = -1L) = "timetable_editor?entryId=$entryId"
     fun studyTaskEditor(taskId: Long = -1L) = "study_task_editor?taskId=$taskId"
     fun pdfViewer(itemId: Long) = "pdf_viewer/$itemId"
