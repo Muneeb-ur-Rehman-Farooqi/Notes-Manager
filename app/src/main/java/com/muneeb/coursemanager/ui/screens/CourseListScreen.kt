@@ -47,6 +47,7 @@ import com.muneeb.coursemanager.data.repository.CourseRepository
 import com.muneeb.coursemanager.data.repository.OnboardingRepository
 import com.muneeb.coursemanager.data.repository.SemesterRepository
 import com.muneeb.coursemanager.navigation.Routes
+import com.muneeb.coursemanager.ui.theme.LocalAppStyle
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -151,6 +152,7 @@ fun CourseListScreen(
     onMenuClick: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val style = LocalAppStyle.current
     var showAddDialog by remember { mutableStateOf(false) }
     var newCourseName by remember { mutableStateOf("") }
     var newCourseCode by remember { mutableStateOf("") }
@@ -178,7 +180,9 @@ fun CourseListScreen(
             ExtendedFloatingActionButton(
                 onClick = { showAddDialog = true },
                 icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                text = { Text(fabLabel) }
+                text = { Text(fabLabel) },
+                containerColor = style.fabContainerColor,
+                contentColor = style.fabContentColor
             )
         }
     ) { paddingValues ->
@@ -199,7 +203,7 @@ fun CourseListScreen(
                 Text(
                     text = "Error: ${uiState.error}",
                     modifier = Modifier.padding(16.dp),
-                    color = MaterialTheme.colorScheme.error
+                    color = style.errorTextColor
                 )
             } else {
                 LazyColumn(
@@ -224,13 +228,13 @@ fun CourseListScreen(
                                 Text(
                                     text = course.name,
                                     style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.onSurface
+                                    color = style.cardTitleColor
                                 )
                                 course.courseCode?.let {
                                     Text(
                                         text = it,
                                         style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        color = style.cardSubtitleColor
                                     )
                                 }
                             }

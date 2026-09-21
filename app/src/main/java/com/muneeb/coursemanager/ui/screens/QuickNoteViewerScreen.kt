@@ -36,6 +36,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavController
 import com.muneeb.coursemanager.data.repository.QuickNoteRepository
 import com.muneeb.coursemanager.navigation.Routes
+import com.muneeb.coursemanager.ui.theme.LocalAppStyle
 import io.noties.markwon.Markwon
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -105,8 +106,10 @@ fun QuickNoteViewerScreen(
     viewModel: QuickNoteViewerViewModel
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val style = LocalAppStyle.current
     val context = LocalContext.current
     val markwon = remember { Markwon.create(context) }
+    // Note content colors are content, not chrome — intentionally not migrated to AppStyle tokens
     val onSurfaceArgb = MaterialTheme.colorScheme.onSurface.toArgb()
     val surfaceArgb = MaterialTheme.colorScheme.surface.toArgb()
 
@@ -159,7 +162,7 @@ fun QuickNoteViewerScreen(
                     ) {
                         Text(
                             text = "Error: ${uiState.error}",
-                            color = MaterialTheme.colorScheme.error
+                            color = style.errorTextColor
                         )
                     }
                 }
@@ -171,15 +174,15 @@ fun QuickNoteViewerScreen(
                             .padding(16.dp)
                     ) {
                         AndroidView(
-                        factory = { ctx ->
-                            TextView(ctx).apply {
-                            layoutParams = android.view.ViewGroup.LayoutParams(
-                            android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                            android.view.ViewGroup.LayoutParams.WRAP_CONTENT
-                                                                        )
-                                                }
-                                    },
-                        update = { tv ->
+                            factory = { ctx ->
+                                TextView(ctx).apply {
+                                    layoutParams = android.view.ViewGroup.LayoutParams(
+                                        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                                        android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+                                    )
+                                }
+                            },
+                            update = { tv ->
                                 tv.textSize = 18f
                                 tv.setTextColor(onSurfaceArgb)
                                 tv.setBackgroundColor(surfaceArgb)

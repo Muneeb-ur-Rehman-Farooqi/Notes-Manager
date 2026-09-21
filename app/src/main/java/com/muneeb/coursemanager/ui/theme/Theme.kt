@@ -9,13 +9,36 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 
-data class ExtraColors(
-    val cardAccentContainer: Color,
-    val cardAccentContent: Color
+data class AppStyle(
+    val fabContainerColor: Color,
+    val fabContentColor: Color,
+    val primaryButtonContainerColor: Color,
+    val primaryButtonContentColor: Color,
+    val bannerContainerColor: Color,
+    val bannerContentColor: Color,
+    val cardContainerColor: Color,
+    val cardContentColor: Color,
+    val cardTitleColor: Color,
+    val cardSubtitleColor: Color,
+    val countdownColor: Color,
+    val errorTextColor: Color
 )
 
-val LocalExtraColors = staticCompositionLocalOf {
-    ExtraColors(cardAccentContainer = Color.Black, cardAccentContent = Color.White)
+val LocalAppStyle = staticCompositionLocalOf {
+    AppStyle(
+        fabContainerColor = Color.Black,
+        fabContentColor = Color.White,
+        primaryButtonContainerColor = Color.Black,
+        primaryButtonContentColor = Color.White,
+        bannerContainerColor = Color.Black,
+        bannerContentColor = Color.White,
+        cardContainerColor = Color(0xFFE0E0E0),
+        cardContentColor = Color.Black,
+        cardTitleColor = Color.Black,
+        cardSubtitleColor = Color(0xFF4A4A4A),
+        countdownColor = Color(0xFFE53935),
+        errorTextColor = Color(0xFFB3261E)
+    )
 }
 
 private fun monochromeLightScheme(): ColorScheme = lightColorScheme(
@@ -67,7 +90,7 @@ private fun monochromeDarkScheme(): ColorScheme = darkColorScheme(
     onBackground = AppWhite,
     surface = DarkSurface,
     onSurface = AppWhite,
-    surfaceVariant = Color(0xFF1A1A1A),
+    surfaceVariant = Color(0xFF2A2A2A),
     onSurfaceVariant = Color(0xFFBDBDBD),
     inverseSurface = AppWhite,
     inverseOnSurface = AppBlack,
@@ -210,6 +233,96 @@ private fun slateDarkScheme(): ColorScheme = darkColorScheme(
     surfaceTint = SlateDarkPrimary
 )
 
+private fun monochromeStyleLight(): AppStyle = AppStyle(
+    fabContainerColor = AppBlack,
+    fabContentColor = AppWhite,
+    primaryButtonContainerColor = AppBlack,
+    primaryButtonContentColor = AppWhite,
+    bannerContainerColor = AppBlack,
+    bannerContentColor = AppWhite,
+    cardContainerColor = Color(0xFFE0E0E0),
+    cardContentColor = AppBlack,
+    cardTitleColor = AppBlack,
+    cardSubtitleColor = Color(0xFF4A4A4A),
+    countdownColor = MonochromeCountdownRed,
+    errorTextColor = ErrorLight
+)
+
+private fun monochromeStyleDark(): AppStyle = AppStyle(
+    fabContainerColor = AppWhite,
+    fabContentColor = AppBlack,
+    primaryButtonContainerColor = AppWhite,
+    primaryButtonContentColor = AppBlack,
+    bannerContainerColor = MonochromeDarkAccentCard,
+    bannerContentColor = AppWhite,
+    cardContainerColor = Color(0xFF2A2A2A),
+    cardContentColor = AppWhite,
+    cardTitleColor = AppWhite,
+    cardSubtitleColor = Color(0xFFBDBDBD),
+    countdownColor = MonochromeCountdownRed,
+    errorTextColor = ErrorDark
+)
+
+private fun pinkStyleLight(): AppStyle = AppStyle(
+    fabContainerColor = PinkLightPrimary,
+    fabContentColor = PinkLightOnPrimary,
+    primaryButtonContainerColor = PinkLightPrimary,
+    primaryButtonContentColor = PinkLightOnPrimary,
+    bannerContainerColor = PinkLightAccentCard,
+    bannerContentColor = AppWhite,
+    cardContainerColor = PinkLightSurfaceVariant,
+    cardContentColor = PinkLightOnSurface,
+    cardTitleColor = PinkLightOnSurface,
+    cardSubtitleColor = PinkLightOnSurfaceVariant,
+    countdownColor = PinkLightCountdown,
+    errorTextColor = ErrorLight
+)
+
+private fun pinkStyleDark(): AppStyle = AppStyle(
+    fabContainerColor = PinkDarkPrimary,
+    fabContentColor = PinkDarkOnPrimary,
+    primaryButtonContainerColor = PinkDarkPrimary,
+    primaryButtonContentColor = PinkDarkOnPrimary,
+    bannerContainerColor = PinkDarkAccentCard,
+    bannerContentColor = AppWhite,
+    cardContainerColor = PinkDarkSurfaceVariant,
+    cardContentColor = PinkDarkOnSurface,
+    cardTitleColor = PinkDarkOnSurface,
+    cardSubtitleColor = PinkDarkOnSurfaceVariant,
+    countdownColor = PinkDarkCountdown,
+    errorTextColor = ErrorDark
+)
+
+private fun slateStyleLight(): AppStyle = AppStyle(
+    fabContainerColor = SlateLightPrimary,
+    fabContentColor = SlateLightOnPrimary,
+    primaryButtonContainerColor = SlateLightPrimary,
+    primaryButtonContentColor = SlateLightOnPrimary,
+    bannerContainerColor = SlateLightAccentCard,
+    bannerContentColor = AppWhite,
+    cardContainerColor = SlateLightSurfaceVariant,
+    cardContentColor = SlateLightOnSurface,
+    cardTitleColor = SlateLightOnSurface,
+    cardSubtitleColor = SlateLightOnSurfaceVariant,
+    countdownColor = SlateCountdownRed,
+    errorTextColor = ErrorLight
+)
+
+private fun slateStyleDark(): AppStyle = AppStyle(
+    fabContainerColor = SlateDarkPrimary,
+    fabContentColor = SlateDarkOnPrimary,
+    primaryButtonContainerColor = SlateDarkPrimary,
+    primaryButtonContentColor = SlateDarkOnPrimary,
+    bannerContainerColor = SlateDarkAccentCard,
+    bannerContentColor = AppWhite,
+    cardContainerColor = SlateDarkSurfaceVariant,
+    cardContentColor = SlateDarkOnSurface,
+    cardTitleColor = SlateDarkOnSurface,
+    cardSubtitleColor = SlateDarkOnSurfaceVariant,
+    countdownColor = SlateCountdownRed,
+    errorTextColor = ErrorDark
+)
+
 @Composable
 fun NotesManagerTheme(
     palette: ThemePalette,
@@ -221,21 +334,12 @@ fun NotesManagerTheme(
         ThemePalette.PINK -> if (darkTheme) pinkDarkScheme() else pinkLightScheme()
         ThemePalette.SLATE -> if (darkTheme) slateDarkScheme() else slateLightScheme()
     }
-    val extraColors: ExtraColors = when (palette) {
-        ThemePalette.MONOCHROME -> ExtraColors(
-            cardAccentContainer = if (darkTheme) MonochromeDarkAccentCard else AppBlack,
-            cardAccentContent = AppWhite
-        )
-        ThemePalette.PINK -> ExtraColors(
-            cardAccentContainer = if (darkTheme) PinkDarkAccentCard else PinkLightAccentCard,
-            cardAccentContent = AppWhite
-        )
-        ThemePalette.SLATE -> ExtraColors(
-            cardAccentContainer = if (darkTheme) SlateDarkAccentCard else SlateLightAccentCard,
-            cardAccentContent = AppWhite
-        )
+    val appStyle: AppStyle = when (palette) {
+        ThemePalette.MONOCHROME -> if (darkTheme) monochromeStyleDark() else monochromeStyleLight()
+        ThemePalette.PINK -> if (darkTheme) pinkStyleDark() else pinkStyleLight()
+        ThemePalette.SLATE -> if (darkTheme) slateStyleDark() else slateStyleLight()
     }
-    CompositionLocalProvider(LocalExtraColors provides extraColors) {
+    CompositionLocalProvider(LocalAppStyle provides appStyle) {
         MaterialTheme(
             colorScheme = colorScheme,
             typography = AppTypography,

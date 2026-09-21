@@ -50,6 +50,7 @@ import com.muneeb.coursemanager.navigation.Routes
 import com.muneeb.coursemanager.reminders.ReminderScheduler
 import com.muneeb.coursemanager.reminders.StudyTaskReminderReceiver
 import com.muneeb.coursemanager.ui.components.CountdownTimerText
+import com.muneeb.coursemanager.ui.theme.LocalAppStyle
 import com.muneeb.coursemanager.ui.util.RequestNotificationPermission
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -192,6 +193,7 @@ fun StudyTaskListScreen(
     onMenuClick: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val style = LocalAppStyle.current
 
     RequestNotificationPermission { }
 
@@ -223,7 +225,9 @@ fun StudyTaskListScreen(
             ExtendedFloatingActionButton(
                 onClick = { navController.navigate(Routes.studyTaskEditor()) },
                 icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                text = { Text("Add Task") }
+                text = { Text("Add Task") },
+                containerColor = style.fabContainerColor,
+                contentColor = style.fabContentColor
             )
         }
     ) { paddingValues ->
@@ -248,7 +252,7 @@ fun StudyTaskListScreen(
                     Text(
                         text = "Error: ${uiState.error}",
                         modifier = Modifier.padding(16.dp),
-                        color = MaterialTheme.colorScheme.error
+                        color = style.errorTextColor
                     )
                 }
                 incompleteTasks.isEmpty() -> {
@@ -265,7 +269,7 @@ fun StudyTaskListScreen(
                                 "All caught up!"
                             },
                             style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = style.cardSubtitleColor
                         )
                     }
                 }
@@ -281,7 +285,7 @@ fun StudyTaskListScreen(
                         if (overdueTasks.isNotEmpty()) {
                             TaskTree(
                                 trunkLabel = "Overdue",
-                                trunkColor = MaterialTheme.colorScheme.error,
+                                trunkColor = style.errorTextColor,
                                 tasks = overdueTasks,
                                 nowMillis = nowMillis,
                                 onToggle = { task ->
@@ -298,7 +302,7 @@ fun StudyTaskListScreen(
                         if (todayTasks.isNotEmpty()) {
                             TaskTree(
                                 trunkLabel = "Today",
-                                trunkColor = MaterialTheme.colorScheme.onBackground,
+                                trunkColor = style.cardTitleColor,
                                 tasks = todayTasks,
                                 nowMillis = nowMillis,
                                 onToggle = { task ->
@@ -321,7 +325,7 @@ fun StudyTaskListScreen(
                             if (tasksForDate.isNotEmpty()) {
                                 TaskTree(
                                     trunkLabel = formatDateHeader(date),
-                                    trunkColor = MaterialTheme.colorScheme.onBackground,
+                                    trunkColor = style.cardTitleColor,
                                     tasks = tasksForDate,
                                     nowMillis = nowMillis,
                                     onToggle = { task ->
@@ -349,14 +353,15 @@ private fun DueTaskBanner(
     task: StudyTask,
     onClick: () -> Unit
 ) {
+    val style = LocalAppStyle.current
     val targetMillis = deadlineEpochMillis(task)
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer,
-            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+            containerColor = style.bannerContainerColor,
+            contentColor = style.bannerContentColor
         )
     ) {
         Column(
@@ -419,6 +424,7 @@ private fun TaskBranch(
     onToggle: () -> Unit,
     onClick: () -> Unit
 ) {
+    val style = LocalAppStyle.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -451,9 +457,8 @@ private fun TaskBranch(
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = task.title,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontWeight = FontWeight.Medium,
+                    style = MaterialTheme.typography.titleLarge,
+                    color = style.cardTitleColor,
                     modifier = Modifier.weight(1f)
                 )
                 Checkbox(
@@ -467,7 +472,7 @@ private fun TaskBranch(
                 Text(
                     text = badge,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = style.cardSubtitleColor,
                     modifier = Modifier.padding(start = 20.dp, top = 2.dp)
                 )
             }

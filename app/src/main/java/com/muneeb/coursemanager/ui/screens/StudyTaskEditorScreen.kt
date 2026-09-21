@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -46,6 +47,7 @@ import com.muneeb.coursemanager.data.repository.StudyTaskRepository
 import com.muneeb.coursemanager.reminders.NotificationChannels
 import com.muneeb.coursemanager.reminders.ReminderScheduler
 import com.muneeb.coursemanager.reminders.StudyTaskReminderReceiver
+import com.muneeb.coursemanager.ui.theme.LocalAppStyle
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -233,6 +235,7 @@ fun StudyTaskEditorScreen(
     viewModel: StudyTaskEditorViewModel
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val style = LocalAppStyle.current
 
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
@@ -340,7 +343,7 @@ fun StudyTaskEditorScreen(
                 if (uiState.error != null) {
                     Text(
                         text = "Error: ${uiState.error}",
-                        color = MaterialTheme.colorScheme.error,
+                        color = style.errorTextColor,
                         modifier = Modifier.padding(bottom = 8.dp)
                     )
                 }
@@ -356,6 +359,10 @@ fun StudyTaskEditorScreen(
                                 }
                             }
                         },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = style.primaryButtonContainerColor,
+                            contentColor = style.primaryButtonContentColor
+                        ),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text("Save")

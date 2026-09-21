@@ -71,6 +71,7 @@ import com.muneeb.coursemanager.navigation.Routes
 import com.muneeb.coursemanager.reminders.ReminderScheduler
 import com.muneeb.coursemanager.ui.components.CountdownTimerText
 import com.muneeb.coursemanager.ui.theme.CopyIcon
+import com.muneeb.coursemanager.ui.theme.LocalAppStyle
 import com.muneeb.coursemanager.ui.util.RequestNotificationPermission
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -229,6 +230,7 @@ fun TimetableListScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
+    val style = LocalAppStyle.current
     var expandedWeek by remember { mutableStateOf(false) }
     var entryForSheet by remember { mutableStateOf<TimetableEntry?>(null) }
 
@@ -249,7 +251,9 @@ fun TimetableListScreen(
             ExtendedFloatingActionButton(
                 onClick = { navController.navigate(Routes.timetableEditor()) },
                 icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                text = { Text("Add Class") }
+                text = { Text("Add Class") },
+                containerColor = style.fabContainerColor,
+                contentColor = style.fabContentColor
             )
         }
     ) { paddingValues ->
@@ -306,7 +310,7 @@ fun TimetableListScreen(
                     Text(
                         text = "Error: ${uiState.error}",
                         modifier = Modifier.padding(16.dp),
-                        color = MaterialTheme.colorScheme.error
+                        color = style.errorTextColor
                     )
                 }
                 uiState.entries.isEmpty() -> {
@@ -319,7 +323,7 @@ fun TimetableListScreen(
                         Text(
                             text = "No classes scheduled.\nTap + to add one.",
                             style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = style.cardSubtitleColor
                         )
                     }
                 }
@@ -504,6 +508,7 @@ fun TimetableListScreen(
 @Composable
 private fun NextClassBanner(entry: TimetableEntry) {
     val context = LocalContext.current
+    val style = LocalAppStyle.current
     val today = Calendar.getInstance().get(Calendar.DAY_OF_WEEK)
     val isToday = entry.dayOfWeek == today
 
@@ -512,8 +517,8 @@ private fun NextClassBanner(entry: TimetableEntry) {
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer,
-            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+            containerColor = style.bannerContainerColor,
+            contentColor = style.bannerContentColor
         )
     ) {
         Row(
@@ -595,18 +600,19 @@ private fun DayTree(
     onEntryClick: (TimetableEntry) -> Unit,
     onEntryLongClick: (TimetableEntry) -> Unit
 ) {
+    val style = LocalAppStyle.current
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
             text = dayName,
             style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onBackground,
+            color = style.cardTitleColor,
             modifier = Modifier.padding(vertical = 8.dp)
         )
         if (entries.isEmpty()) {
             Text(
                 text = "No classes",
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = style.cardSubtitleColor,
                 modifier = Modifier.padding(start = 12.dp, top = 4.dp, bottom = 8.dp)
             )
         } else {
@@ -628,6 +634,7 @@ private fun TimetableBranch(
     onLongClick: () -> Unit
 ) {
     val context = LocalContext.current
+    val style = LocalAppStyle.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -663,15 +670,15 @@ private fun TimetableBranch(
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = entry.subjectName,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface
+                    style = MaterialTheme.typography.titleLarge,
+                    color = style.cardTitleColor
                 )
             }
             Spacer(modifier = Modifier.height(3.dp))
             Text(
                 text = timeRange(entry),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = style.cardSubtitleColor,
                 modifier = Modifier.padding(start = 22.dp)
             )
             val details = entryDetails(entry)
@@ -679,7 +686,7 @@ private fun TimetableBranch(
                 Text(
                     text = details,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = style.cardSubtitleColor,
                     modifier = Modifier.padding(start = 22.dp, top = 2.dp)
                 )
             }

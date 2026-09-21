@@ -11,6 +11,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import com.muneeb.coursemanager.ui.theme.LocalAppStyle
 import kotlinx.coroutines.delay
 
 @Composable
@@ -35,7 +36,7 @@ fun CountdownTimerText(
     Text(
         text = label,
         modifier = modifier,
-        color = MaterialTheme.colorScheme.error,
+        color = LocalAppStyle.current.countdownColor,
         fontFamily = FontFamily.Monospace,
         fontWeight = FontWeight.Bold,
         style = MaterialTheme.typography.titleLarge

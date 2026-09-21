@@ -10,7 +10,10 @@ val DarkBackground = Color(0xFF000000)
 val DarkSurface = Color(0xFF000000)
 
 // Monochrome accent card — non-inverting
-val MonochromeDarkAccentCard = Color(0xFF2A2A2A)
+val MonochromeDarkAccentCard = Color(0xFF00000)
+
+// Monochrome countdown/urgency red — vivid, NOT the muted ErrorLight
+val MonochromeCountdownRed = Color(0xFFE53935)
 
 // Pink palette — light
 val PinkLightBackground = Color(0xFFFFF0F5)
@@ -65,6 +68,10 @@ val PinkDarkInversePrimary = Color(0xFFE91E63)
 val PinkLightAccentCard = Color(0xFF6B1A3A)
 val PinkDarkAccentCard = Color(0xFF3A1A28)
 
+// Pink countdown/urgency color — leans red-pink, distinct from PinkLightPrimary
+val PinkLightCountdown = Color(0xFFD81B60)
+val PinkDarkCountdown = Color(0xFFD81B60)
+
 // Slate palette — light (Claude-like warm grey, no orange/terracotta)
 val SlateLightBackground = Color(0xFFFAF9F7)
 val SlateLightPrimary = Color(0xFF5C5C5C)
@@ -117,6 +124,9 @@ val SlateDarkInversePrimary = Color(0xFF5C5C5C)
 // Slate accent card — non-inverting
 val SlateLightAccentCard = Color(0xFF2B2B2B)
 val SlateDarkAccentCard = Color(0xFF3A3A3A)
+
+// Slate countdown/urgency red — same vivid red as Monochrome
+val SlateCountdownRed = Color(0xFFE53935)
 
 // Shared error roles
 val ErrorLight = Color(0xFFB3261E)

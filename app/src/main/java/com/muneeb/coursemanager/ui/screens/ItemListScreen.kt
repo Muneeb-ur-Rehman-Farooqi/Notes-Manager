@@ -66,6 +66,7 @@ import com.muneeb.coursemanager.data.repository.CategoryRepository
 import com.muneeb.coursemanager.data.repository.ItemRepository
 import com.muneeb.coursemanager.data.repository.PageRepository
 import com.muneeb.coursemanager.navigation.Routes
+import com.muneeb.coursemanager.ui.theme.LocalAppStyle
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -216,6 +217,7 @@ fun ItemListScreen(
     onMenuClick: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val style = LocalAppStyle.current
     var selectedItemIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
     val isSelectionMode = selectedItemIds.isNotEmpty()
     var showAddSheet by remember { mutableStateOf(false) }
@@ -331,7 +333,9 @@ fun ItemListScreen(
             ExtendedFloatingActionButton(
                 onClick = { showAddSheet = true },
                 icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                text = { Text("Add Files") }
+                text = { Text("Add Files") },
+                containerColor = style.fabContainerColor,
+                contentColor = style.fabContentColor
             )
         }
     ) { paddingValues ->
@@ -351,7 +355,7 @@ fun ItemListScreen(
                 Text(
                     text = "Error: ${uiState.error}",
                     modifier = Modifier.padding(16.dp),
-                    color = MaterialTheme.colorScheme.error
+                    color = style.errorTextColor
                 )
             } else if (uiState.items.isEmpty()) {
                 Box(
@@ -361,7 +365,7 @@ fun ItemListScreen(
                     Text(
                         text = "Please drop your related files",
                         style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = style.cardSubtitleColor
                     )
                 }
             } else {
@@ -611,6 +615,7 @@ private fun ItemRow(
     onToggleSelect: () -> Unit,
     onEnterSelectionMode: () -> Unit
 ) {
+    val style = LocalAppStyle.current
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -636,7 +641,7 @@ private fun ItemRow(
             Text(
                 text = stripKnownExtension(item.displayName),
                 style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface
+                color = style.cardTitleColor
             )
         }
     }

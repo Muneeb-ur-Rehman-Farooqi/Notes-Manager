@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -43,6 +44,7 @@ import com.muneeb.coursemanager.data.preferences.UserPreferences
 import com.muneeb.coursemanager.data.repository.TimetableRepository
 import com.muneeb.coursemanager.reminders.NotificationChannels
 import com.muneeb.coursemanager.reminders.ReminderScheduler
+import com.muneeb.coursemanager.ui.theme.LocalAppStyle
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -336,6 +338,7 @@ fun TimetableEntryEditorScreen(
     viewModel: TimetableEditorViewModel
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val style = LocalAppStyle.current
 
     var showStartPicker by remember { mutableStateOf(false) }
     var showEndPicker by remember { mutableStateOf(false) }
@@ -485,7 +488,7 @@ fun TimetableEntryEditorScreen(
                 if (uiState.error != null) {
                     Text(
                         text = "Error: ${uiState.error}",
-                        color = MaterialTheme.colorScheme.error,
+                        color = style.errorTextColor,
                         modifier = Modifier.padding(bottom = 8.dp)
                     )
                 }
@@ -502,6 +505,10 @@ fun TimetableEntryEditorScreen(
                             }
                         },
                         enabled = isValid,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = style.primaryButtonContainerColor,
+                            contentColor = style.primaryButtonContentColor
+                        ),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text("Save")

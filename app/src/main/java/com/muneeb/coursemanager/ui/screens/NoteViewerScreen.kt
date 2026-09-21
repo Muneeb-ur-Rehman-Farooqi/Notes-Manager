@@ -37,6 +37,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavController
 import com.muneeb.coursemanager.data.repository.ItemRepository
 import com.muneeb.coursemanager.navigation.Routes
+import com.muneeb.coursemanager.ui.theme.LocalAppStyle
 import io.noties.markwon.Markwon
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -110,8 +111,10 @@ fun NoteViewerScreen(
     viewModel: NoteViewerViewModel
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val style = LocalAppStyle.current
     val context = LocalContext.current
     val markwon = remember { Markwon.create(context) }
+    // Note content colors are content, not chrome — intentionally not migrated to AppStyle tokens
     val onSurfaceArgb = MaterialTheme.colorScheme.onSurface.toArgb()
     val surfaceArgb = MaterialTheme.colorScheme.surface.toArgb()
 
@@ -168,7 +171,7 @@ fun NoteViewerScreen(
                     ) {
                         Text(
                             text = "Error: ${uiState.error}",
-                            color = MaterialTheme.colorScheme.error
+                            color = style.errorTextColor
                         )
                     }
                 }

@@ -49,7 +49,7 @@ import com.muneeb.coursemanager.data.formatStageLabel
 import com.muneeb.coursemanager.data.preferences.UserPreferences
 import com.muneeb.coursemanager.data.repository.SemesterRepository
 import com.muneeb.coursemanager.navigation.Routes
-import com.muneeb.coursemanager.ui.theme.LocalExtraColors
+import com.muneeb.coursemanager.ui.theme.LocalAppStyle
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -140,7 +140,7 @@ fun SemesterListScreen(
     var showAddDialog by remember { mutableStateOf(false) }
     var newSemesterName by remember { mutableStateOf("") }
     var semesterNumber by remember { mutableStateOf("") }
-    val extraColors = LocalExtraColors.current
+    val style = LocalAppStyle.current
 
     if (uiState.showMandatoryDialog) {
         AlertDialog(
@@ -195,7 +195,9 @@ fun SemesterListScreen(
             ExtendedFloatingActionButton(
                 onClick = { showAddDialog = true },
                 icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                text = { Text("Add Semester") }
+                text = { Text("Add Semester") },
+                containerColor = style.fabContainerColor,
+                contentColor = style.fabContentColor
             )
         }
     ) { paddingValues ->
@@ -215,7 +217,7 @@ fun SemesterListScreen(
                 Text(
                     text = "Error: ${uiState.error}",
                     modifier = Modifier.padding(16.dp),
-                    color = MaterialTheme.colorScheme.error
+                    color = style.errorTextColor
                 )
             } else {
                 LazyColumn(
@@ -235,7 +237,8 @@ fun SemesterListScreen(
                                 .padding(4.dp),
                             shape = RoundedCornerShape(16.dp),
                             colors = CardDefaults.cardColors(
-                                containerColor = extraColors.cardAccentContainer
+                                containerColor = style.cardContainerColor,
+                                contentColor = style.cardContentColor
                             ),
                             onClick = {
                                 navController.navigate(Routes.courseList(semester.semesterId))
@@ -248,7 +251,7 @@ fun SemesterListScreen(
                                 Text(
                                     text = displayText,
                                     style = MaterialTheme.typography.headlineMedium,
-                                    color = extraColors.cardAccentContent,
+                                    color = style.cardTitleColor,
                                     fontWeight = FontWeight.Bold
                                 )
                             }

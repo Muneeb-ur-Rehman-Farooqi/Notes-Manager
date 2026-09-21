@@ -40,6 +40,7 @@ import androidx.navigation.NavController
 import com.muneeb.coursemanager.data.entities.Category
 import com.muneeb.coursemanager.data.repository.CategoryRepository
 import com.muneeb.coursemanager.navigation.Routes
+import com.muneeb.coursemanager.ui.theme.LocalAppStyle
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -111,6 +112,7 @@ fun CategoryListScreen(
     onMenuClick: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val style = LocalAppStyle.current
     var showAddDialog by remember { mutableStateOf(false) }
     var newCategoryName by remember { mutableStateOf("") }
 
@@ -129,7 +131,9 @@ fun CategoryListScreen(
             ExtendedFloatingActionButton(
                 onClick = { showAddDialog = true },
                 icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                text = { Text("Add Category") }
+                text = { Text("Add Category") },
+                containerColor = style.fabContainerColor,
+                contentColor = style.fabContentColor
             )
         }
     ) { paddingValues ->
@@ -150,7 +154,7 @@ fun CategoryListScreen(
                 Text(
                     text = "Error: ${uiState.error}",
                     modifier = Modifier.padding(16.dp),
-                    color = MaterialTheme.colorScheme.error
+                    color = style.errorTextColor
                 )
             } else {
                 LazyColumn(
@@ -169,7 +173,7 @@ fun CategoryListScreen(
                             Text(
                                 text = category.name,
                                 style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurface,
+                                color = style.cardTitleColor,
                                 modifier = Modifier.padding(12.dp)
                             )
                         }

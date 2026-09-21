@@ -48,6 +48,7 @@ import androidx.navigation.NavController
 import com.muneeb.coursemanager.data.entities.QuickNote
 import com.muneeb.coursemanager.data.repository.QuickNoteRepository
 import com.muneeb.coursemanager.navigation.Routes
+import com.muneeb.coursemanager.ui.theme.LocalAppStyle
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -128,6 +129,7 @@ fun NotesListScreen(
     onMenuClick: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val style = LocalAppStyle.current
     var selectedNoteIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
     val isSelectionMode = selectedNoteIds.isNotEmpty()
     var renameTarget by remember { mutableStateOf<QuickNote?>(null) }
@@ -178,7 +180,9 @@ fun NotesListScreen(
             ExtendedFloatingActionButton(
                 onClick = { navController.navigate(Routes.quickNoteEditor()) },
                 icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                text = { Text("New Note") }
+                text = { Text("New Note") },
+                containerColor = style.fabContainerColor,
+                contentColor = style.fabContentColor
             )
         }
     ) { paddingValues ->
@@ -198,7 +202,7 @@ fun NotesListScreen(
                 Text(
                     text = "Error: ${uiState.error}",
                     modifier = Modifier.padding(16.dp),
-                    color = MaterialTheme.colorScheme.error
+                    color = style.errorTextColor
                 )
             } else if (uiState.notes.isEmpty()) {
                 Box(
@@ -208,7 +212,7 @@ fun NotesListScreen(
                     Text(
                         text = "No notes yet.\nTap + to create one.",
                         style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = style.cardSubtitleColor
                     )
                 }
             } else {
@@ -315,6 +319,7 @@ private fun NoteCard(
     onClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
+    val style = LocalAppStyle.current
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -343,14 +348,14 @@ private fun NoteCard(
                 Text(
                     text = note.title ?: note.content.take(40),
                     style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = style.cardTitleColor,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = formatDate(note.updatedAt),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = style.cardSubtitleColor
                 )
             }
         }
