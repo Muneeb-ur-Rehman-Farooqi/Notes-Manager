@@ -9,9 +9,6 @@ val AppGrey = Color(0xFF9E9E9E)
 val DarkBackground = Color(0xFF000000)
 val DarkSurface = Color(0xFF000000)
 
-// Monochrome accent card — non-inverting
-val MonochromeDarkAccentCard = Color(0xFF00000)
-
 // Monochrome countdown/urgency red — vivid, NOT the muted ErrorLight
 val MonochromeCountdownRed = Color(0xFFE53935)
 
