@@ -261,7 +261,6 @@ fun TimetableListScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .verticalScroll(rememberScrollState())
         ) {
             if (!canScheduleExact) {
                 Card(
@@ -295,102 +294,115 @@ fun TimetableListScreen(
 
             RequestNotificationPermission { }
 
-            when {
-                uiState.isLoading && uiState.entries.isEmpty() -> {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 48.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator()
-                    }
-                }
-                uiState.error != null && uiState.entries.isEmpty() -> {
-                    Text(
-                        text = "Error: ${uiState.error}",
-                        modifier = Modifier.padding(16.dp),
-                        color = style.errorTextColor
-                    )
-                }
-                uiState.entries.isEmpty() -> {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 48.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "No classes scheduled.\nTap + to add one.",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = style.cardSubtitleColor
-                        )
-                    }
-                }
-                else -> {
-                    val nextClass = computeNextClass(uiState.entries)
-                    nextClass?.let { entry ->
-                        NextClassBanner(entry)
-                    }
-
-                    val today = Calendar.getInstance().get(Calendar.DAY_OF_WEEK)
-                    val todayName = dayNames[today] ?: "Today"
-                    val todayEntries = uiState.entries
-                        .filter { it.dayOfWeek == today }
-                        .sortedBy { it.startHour * 60 + it.startMinute }
-
-                    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                        DayTree(
-                            dayName = todayName,
-                            entries = todayEntries,
-                            onEntryClick = { navController.navigate(Routes.timetableEditor(it.entryId)) },
-                            onEntryLongClick = { entryForSheet = it }
-                        )
-
-                        TextButton(
-                            onClick = { expandedWeek = !expandedWeek },
-                            modifier = Modifier.padding(top = 8.dp)
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+            ) {
+                when {
+                    uiState.isLoading && uiState.entries.isEmpty() -> {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Text(if (expandedWeek) "Hide Full Week" else "View Full Week")
+                            CircularProgressIndicator()
                         }
+                    }
+                    uiState.error != null && uiState.entries.isEmpty() -> {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Error: ${uiState.error}",
+                                modifier = Modifier.padding(16.dp),
+                                color = style.errorTextColor
+                            )
+                        }
+                    }
+                    uiState.entries.isEmpty() -> {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "No classes scheduled.\nTap + to add one.",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = style.cardSubtitleColor
+                            )
+                        }
+                    }
+                    else -> {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .verticalScroll(rememberScrollState())
+                        ) {
+                            val nextClass = computeNextClass(uiState.entries)
+                            nextClass?.let { entry ->
+                                NextClassBanner(entry)
+                            }
 
-                        if (expandedWeek) {
-                            val grouped = uiState.entries.groupBy { it.dayOfWeek }
-                            val sortedDays = grouped.keys.sorted()
-                            sortedDays.forEach { day ->
-                                val dayEntries = grouped[day]
-                                    ?.sortedBy { it.startHour * 60 + it.startMinute }
-                                    .orEmpty()
-                                if (dayEntries.isNotEmpty()) {
-                                    DayTree(
-                                        dayName = dayNames[day] ?: "Day $day",
-                                        entries = dayEntries,
-                                        onEntryClick = { navController.navigate(Routes.timetableEditor(it.entryId)) },
-                                        onEntryLongClick = { entryForSheet = it }
-                                    )
+                            val today = Calendar.getInstance().get(Calendar.DAY_OF_WEEK)
+                            val todayName = dayNames[today] ?: "Today"
+                            val todayEntries = uiState.entries
+                                .filter { it.dayOfWeek == today }
+                                .sortedBy { it.startHour * 60 + it.startMinute }
+
+                            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                                DayTree(
+                                    dayName = todayName,
+                                    entries = todayEntries,
+                                    onEntryClick = { navController.navigate(Routes.timetableEditor(it.entryId)) },
+                                    onEntryLongClick = { entryForSheet = it }
+                                )
+
+                                TextButton(
+                                    onClick = { expandedWeek = !expandedWeek },
+                                    modifier = Modifier.padding(top = 8.dp)
+                                ) {
+                                    Text(if (expandedWeek) "Hide Full Week" else "View Full Week")
+                                }
+
+                                if (expandedWeek) {
+                                    val grouped = uiState.entries.groupBy { it.dayOfWeek }
+                                    val sortedDays = grouped.keys.sorted()
+                                    sortedDays.forEach { day ->
+                                        val dayEntries = grouped[day]
+                                            ?.sortedBy { it.startHour * 60 + it.startMinute }
+                                            .orEmpty()
+                                        if (dayEntries.isNotEmpty()) {
+                                            DayTree(
+                                                dayName = dayNames[day] ?: "Day $day",
+                                                entries = dayEntries,
+                                                onEntryClick = { navController.navigate(Routes.timetableEditor(it.entryId)) },
+                                                onEntryLongClick = { entryForSheet = it }
+                                            )
+                                        }
+                                    }
                                 }
                             }
+
+                            Spacer(modifier = Modifier.height(24.dp))
+
+                            Box(
+                                modifier = Modifier.fillMaxWidth(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "Reset Timetable",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    textDecoration = TextDecoration.Underline,
+                                    modifier = Modifier
+                                        .clickable { viewModel.setShowResetConfirmation(true) }
+                                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(24.dp))
                         }
                     }
-
-                    Spacer(modifier = Modifier.height(24.dp))
-
-                    Box(
-                        modifier = Modifier.fillMaxWidth(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "Reset Timetable",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                            textDecoration = TextDecoration.Underline,
-                            modifier = Modifier
-                                .clickable { viewModel.setShowResetConfirmation(true) }
-                                .padding(horizontal = 16.dp, vertical = 8.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(24.dp))
                 }
             }
         }
@@ -670,7 +682,7 @@ private fun TimetableBranch(
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = entry.subjectName,
-                    style = MaterialTheme.typography.titleLarge,
+                    style = MaterialTheme.typography.bodyLarge,
                     color = style.cardTitleColor
                 )
             }

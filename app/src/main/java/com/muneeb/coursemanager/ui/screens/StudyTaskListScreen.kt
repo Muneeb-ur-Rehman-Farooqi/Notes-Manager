@@ -235,113 +235,125 @@ fun StudyTaskListScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .verticalScroll(rememberScrollState())
         ) {
-            when {
-                uiState.isLoading && uiState.tasks.isEmpty() -> {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 48.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator()
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+            ) {
+                when {
+                    uiState.isLoading && uiState.tasks.isEmpty() -> {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator()
+                        }
                     }
-                }
-                uiState.error != null && uiState.tasks.isEmpty() -> {
-                    Text(
-                        text = "Error: ${uiState.error}",
-                        modifier = Modifier.padding(16.dp),
-                        color = style.errorTextColor
-                    )
-                }
-                incompleteTasks.isEmpty() -> {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 48.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = if (uiState.tasks.isEmpty()) {
-                                "No tasks yet.\nTap + to add one."
-                            } else {
-                                "All caught up!"
-                            },
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = style.cardSubtitleColor
-                        )
-                    }
-                }
-                else -> {
-                    nextFlagTask?.let { task ->
-                        DueTaskBanner(
-                            task = task,
-                            onClick = { navController.navigate(Routes.studyTaskEditor(task.taskId)) }
-                        )
-                    }
-
-                    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                        if (overdueTasks.isNotEmpty()) {
-                            TaskTree(
-                                trunkLabel = "Overdue",
-                                trunkColor = style.errorTextColor,
-                                tasks = overdueTasks,
-                                nowMillis = nowMillis,
-                                onToggle = { task ->
-                                    viewModel.viewModelScope.launch {
-                                        viewModel.toggleCompleted(task)
-                                    }
-                                },
-                                onClick = { task ->
-                                    navController.navigate(Routes.studyTaskEditor(task.taskId))
-                                }
+                    uiState.error != null && uiState.tasks.isEmpty() -> {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Error: ${uiState.error}",
+                                modifier = Modifier.padding(16.dp),
+                                color = style.errorTextColor
                             )
                         }
-
-                        if (todayTasks.isNotEmpty()) {
-                            TaskTree(
-                                trunkLabel = "Today",
-                                trunkColor = style.cardTitleColor,
-                                tasks = todayTasks,
-                                nowMillis = nowMillis,
-                                onToggle = { task ->
-                                    viewModel.viewModelScope.launch {
-                                        viewModel.toggleCompleted(task)
-                                    }
+                    }
+                    incompleteTasks.isEmpty() -> {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = if (uiState.tasks.isEmpty()) {
+                                    "No tasks yet.\nTap + to add one."
+                                } else {
+                                    "All caught up!"
                                 },
-                                onClick = { task ->
-                                    navController.navigate(Routes.studyTaskEditor(task.taskId))
-                                }
+                                style = MaterialTheme.typography.titleMedium,
+                                color = style.cardSubtitleColor
                             )
                         }
-
-                        val grouped = remainingDeadlineTasks
-                            .filter { it.deadlineDateMillis != null }
-                            .groupBy { it.deadlineDateMillis!! }
-                        val sortedDates = grouped.keys.sorted()
-                        sortedDates.forEach { date ->
-                            val tasksForDate = grouped[date].orEmpty()
-                            if (tasksForDate.isNotEmpty()) {
-                                TaskTree(
-                                    trunkLabel = formatDateHeader(date),
-                                    trunkColor = style.cardTitleColor,
-                                    tasks = tasksForDate,
-                                    nowMillis = nowMillis,
-                                    onToggle = { task ->
-                                        viewModel.viewModelScope.launch {
-                                            viewModel.toggleCompleted(task)
-                                        }
-                                    },
-                                    onClick = { task ->
-                                        navController.navigate(Routes.studyTaskEditor(task.taskId))
-                                    }
+                    }
+                    else -> {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .verticalScroll(rememberScrollState())
+                        ) {
+                            nextFlagTask?.let { task ->
+                                DueTaskBanner(
+                                    task = task,
+                                    onClick = { navController.navigate(Routes.studyTaskEditor(task.taskId)) }
                                 )
                             }
+
+                            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                                if (overdueTasks.isNotEmpty()) {
+                                    TaskTree(
+                                        trunkLabel = "Overdue",
+                                        trunkColor = style.errorTextColor,
+                                        tasks = overdueTasks,
+                                        nowMillis = nowMillis,
+                                        onToggle = { task ->
+                                            viewModel.viewModelScope.launch {
+                                                viewModel.toggleCompleted(task)
+                                            }
+                                        },
+                                        onClick = { task ->
+                                            navController.navigate(Routes.studyTaskEditor(task.taskId))
+                                        }
+                                    )
+                                }
+
+                                if (todayTasks.isNotEmpty()) {
+                                    TaskTree(
+                                        trunkLabel = "Today",
+                                        trunkColor = style.cardTitleColor,
+                                        tasks = todayTasks,
+                                        nowMillis = nowMillis,
+                                        onToggle = { task ->
+                                            viewModel.viewModelScope.launch {
+                                                viewModel.toggleCompleted(task)
+                                            }
+                                        },
+                                        onClick = { task ->
+                                            navController.navigate(Routes.studyTaskEditor(task.taskId))
+                                        }
+                                    )
+                                }
+
+                                val grouped = remainingDeadlineTasks
+                                    .filter { it.deadlineDateMillis != null }
+                                    .groupBy { it.deadlineDateMillis!! }
+                                val sortedDates = grouped.keys.sorted()
+                                sortedDates.forEach { date ->
+                                    val tasksForDate = grouped[date].orEmpty()
+                                    if (tasksForDate.isNotEmpty()) {
+                                        TaskTree(
+                                            trunkLabel = formatDateHeader(date),
+                                            trunkColor = style.cardTitleColor,
+                                            tasks = tasksForDate,
+                                            nowMillis = nowMillis,
+                                            onToggle = { task ->
+                                                viewModel.viewModelScope.launch {
+                                                    viewModel.toggleCompleted(task)
+                                                }
+                                            },
+                                            onClick = { task ->
+                                                navController.navigate(Routes.studyTaskEditor(task.taskId))
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(24.dp))
                         }
                     }
-
-                    Spacer(modifier = Modifier.height(24.dp))
                 }
             }
         }
@@ -457,7 +469,7 @@ private fun TaskBranch(
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = task.title,
-                    style = MaterialTheme.typography.titleLarge,
+                    style = MaterialTheme.typography.bodyLarge,
                     color = style.cardTitleColor,
                     modifier = Modifier.weight(1f)
                 )
