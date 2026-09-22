@@ -1,5 +1,6 @@
 package com.muneeb.coursemanager.ui.screens
 
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,10 +15,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
@@ -111,6 +116,22 @@ class SemesterListViewModel(
         }
     }
 
+    suspend fun renameSemester(semester: Semester, newNumber: String) {
+        try {
+            semesterRepository.update(semester.copy(name = "Semester $newNumber"))
+        } catch (e: Exception) {
+            _uiState.update { it.copy(error = "Failed to rename semester: ${e.message}") }
+        }
+    }
+
+    suspend fun deleteSemesters(semesters: List<Semester>) {
+        try {
+            semesters.forEach { semesterRepository.delete(it) }
+        } catch (e: Exception) {
+            _uiState.update { it.copy(error = "Failed to delete semester: ${e.message}") }
+        }
+    }
+
     fun dismissMandatoryDialog() {
         _uiState.update { it.copy(showMandatoryDialog = false) }
     }
@@ -129,6 +150,10 @@ class SemesterListViewModel(
     }
 }
 
+/** Pulls the trailing number/word out of a "Semester X" name for pre-filling the rename field. */
+private fun extractSemesterNumber(name: String): String =
+    name.removePrefix("Semester").trim()
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SemesterListScreen(
@@ -137,10 +162,18 @@ fun SemesterListScreen(
     onMenuClick: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    var showAddDialog by remember { mutableStateOf(false) }
-    var newSemesterName by remember { mutableStateOf("") }
-    var semesterNumber by remember { mutableStateOf("") }
     val style = LocalAppStyle.current
+
+    var showAddDialog by remember { mutableStateOf(false) }
+    var addNumberText by remember { mutableStateOf("") }
+    var semesterNumber by remember { mutableStateOf("") } // mandatory dialog field
+
+    var selectedIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
+    val isSelectionMode = selectedIds.isNotEmpty()
+
+    var renameTarget by remember { mutableStateOf<Semester?>(null) }
+    var renameNumberText by remember { mutableStateOf("") }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
 
     if (uiState.showMandatoryDialog) {
         AlertDialog(
@@ -182,14 +215,43 @@ fun SemesterListScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Semesters") },
-                navigationIcon = {
-                    IconButton(onClick = onMenuClick) {
-                        Icon(Icons.Default.Menu, contentDescription = "Menu")
+            if (isSelectionMode) {
+                TopAppBar(
+                    title = { Text("${selectedIds.size} selected") },
+                    navigationIcon = {
+                        IconButton(onClick = { selectedIds = emptySet() }) {
+                            Icon(Icons.Default.Close, contentDescription = "Exit selection")
+                        }
+                    },
+                    actions = {
+                        val singleSelected = if (selectedIds.size == 1) {
+                            uiState.semesters.firstOrNull { it.semesterId == selectedIds.first() }
+                        } else null
+                        if (singleSelected != null) {
+                            IconButton(
+                                onClick = {
+                                    renameTarget = singleSelected
+                                    renameNumberText = extractSemesterNumber(singleSelected.name)
+                                }
+                            ) {
+                                Icon(Icons.Default.Edit, contentDescription = "Rename")
+                            }
+                        }
+                        IconButton(onClick = { showDeleteConfirm = true }) {
+                            Icon(Icons.Default.Delete, contentDescription = "Delete")
+                        }
                     }
-                }
-            )
+                )
+            } else {
+                TopAppBar(
+                    title = { Text("Semesters") },
+                    navigationIcon = {
+                        IconButton(onClick = onMenuClick) {
+                            Icon(Icons.Default.Menu, contentDescription = "Menu")
+                        }
+                    }
+                )
+            }
         },
         floatingActionButton = {
             ExtendedFloatingActionButton(
@@ -230,19 +292,36 @@ fun SemesterListScreen(
                             semester.educationLevel == null -> semester.name
                             else -> formatStageLabel(semester.educationLevel, semester.partGrade)
                         }
+                        val isSelected = selectedIds.contains(semester.semesterId)
+
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(200.dp)
-                                .padding(4.dp),
+                                .padding(4.dp)
+                                .combinedClickable(
+                                    onClick = {
+                                        if (isSelectionMode) {
+                                            selectedIds = if (isSelected) {
+                                                selectedIds - semester.semesterId
+                                            } else {
+                                                selectedIds + semester.semesterId
+                                            }
+                                        } else {
+                                            navController.navigate(Routes.courseList(semester.semesterId))
+                                        }
+                                    },
+                                    onLongClick = {
+                                        if (!isSelectionMode) {
+                                            selectedIds = setOf(semester.semesterId)
+                                        }
+                                    }
+                                ),
                             shape = RoundedCornerShape(16.dp),
                             colors = CardDefaults.cardColors(
                                 containerColor = style.cardContainerColor,
                                 contentColor = style.cardContentColor
-                            ),
-                            onClick = {
-                                navController.navigate(Routes.courseList(semester.semesterId))
-                            }
+                            )
                         ) {
                             Box(
                                 modifier = Modifier.fillMaxSize(),
@@ -254,6 +333,11 @@ fun SemesterListScreen(
                                     color = style.cardTitleColor,
                                     fontWeight = FontWeight.Bold
                                 )
+                                if (isSelectionMode) {
+                                    Box(modifier = Modifier.align(Alignment.TopStart).padding(12.dp)) {
+                                        Checkbox(checked = isSelected, onCheckedChange = null)
+                                    }
+                                }
                             }
                         }
                     }
@@ -268,19 +352,22 @@ fun SemesterListScreen(
             title = { Text("Add Semester") },
             text = {
                 OutlinedTextField(
-                    value = newSemesterName,
-                    onValueChange = { newSemesterName = it },
-                    label = { Text("Semester Name") },
-                    singleLine = true
+                    value = addNumberText,
+                    onValueChange = { addNumberText = it },
+                    label = { Text("Semester Number") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth()
                 )
             },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        if (newSemesterName.isNotBlank()) {
+                        val number = addNumberText.trim()
+                        if (number.isNotBlank()) {
                             viewModel.viewModelScope.launch {
-                                viewModel.addSemester(newSemesterName.trim())
-                                newSemesterName = ""
+                                viewModel.addSemester("Semester $number")
+                                addNumberText = ""
                                 showAddDialog = false
                             }
                         }
@@ -291,6 +378,78 @@ fun SemesterListScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showAddDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    val currentRenameTarget = renameTarget
+    if (currentRenameTarget != null) {
+        AlertDialog(
+            onDismissRequest = { renameTarget = null },
+            title = { Text("Rename Semester") },
+            text = {
+                OutlinedTextField(
+                    value = renameNumberText,
+                    onValueChange = { renameNumberText = it },
+                    label = { Text("Semester Number") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = renameNumberText.isNotBlank(),
+                    onClick = {
+                        viewModel.viewModelScope.launch {
+                            viewModel.renameSemester(currentRenameTarget, renameNumberText.trim())
+                            renameTarget = null
+                            selectedIds = emptySet()
+                        }
+                    }
+                ) {
+                    Text("Save")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { renameTarget = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("Delete Semester") },
+            text = {
+                Text(
+                    if (selectedIds.size == 1) {
+                        "This will also delete every course, category, and file inside it. This can't be undone."
+                    } else {
+                        "This will also delete every course, category, and file inside these ${selectedIds.size} semesters. This can't be undone."
+                    }
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val toDelete = uiState.semesters.filter { selectedIds.contains(it.semesterId) }
+                        viewModel.viewModelScope.launch {
+                            viewModel.deleteSemesters(toDelete)
+                            selectedIds = emptySet()
+                            showDeleteConfirm = false
+                        }
+                    }
+                ) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) {
                     Text("Cancel")
                 }
             }

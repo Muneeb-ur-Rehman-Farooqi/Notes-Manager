@@ -1,8 +1,10 @@
 package com.muneeb.coursemanager.ui.screens
 
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -10,9 +12,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
@@ -90,6 +96,22 @@ class CategoryListViewModel(
         }
     }
 
+    suspend fun renameCategory(category: Category, newName: String) {
+        try {
+            categoryRepository.update(category.copy(name = newName))
+        } catch (e: Exception) {
+            _uiState.update { it.copy(error = "Failed to rename category: ${e.message}") }
+        }
+    }
+
+    suspend fun deleteCategories(categories: List<Category>) {
+        try {
+            categories.forEach { categoryRepository.delete(it) }
+        } catch (e: Exception) {
+            _uiState.update { it.copy(error = "Failed to delete category: ${e.message}") }
+        }
+    }
+
     class Factory(
         private val categoryRepository: CategoryRepository,
         private val courseId: Long
@@ -113,19 +135,56 @@ fun CategoryListScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val style = LocalAppStyle.current
+
     var showAddDialog by remember { mutableStateOf(false) }
     var newCategoryName by remember { mutableStateOf("") }
 
+    var selectedIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
+    val isSelectionMode = selectedIds.isNotEmpty()
+
+    var renameTarget by remember { mutableStateOf<Category?>(null) }
+    var renameNameText by remember { mutableStateOf("") }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Categories") },
-                navigationIcon = {
-                    IconButton(onClick = onMenuClick) {
-                        Icon(Icons.Default.Menu, contentDescription = "Menu")
+            if (isSelectionMode) {
+                TopAppBar(
+                    title = { Text("${selectedIds.size} selected") },
+                    navigationIcon = {
+                        IconButton(onClick = { selectedIds = emptySet() }) {
+                            Icon(Icons.Default.Close, contentDescription = "Exit selection")
+                        }
+                    },
+                    actions = {
+                        val singleSelected = if (selectedIds.size == 1) {
+                            uiState.categories.firstOrNull { it.categoryId == selectedIds.first() }
+                        } else null
+                        if (singleSelected != null) {
+                            IconButton(
+                                onClick = {
+                                    renameTarget = singleSelected
+                                    renameNameText = singleSelected.name
+                                }
+                            ) {
+                                Icon(Icons.Default.Edit, contentDescription = "Rename")
+                            }
+                        }
+                        IconButton(onClick = { showDeleteConfirm = true }) {
+                            Icon(Icons.Default.Delete, contentDescription = "Delete")
+                        }
                     }
-                }
-            )
+                )
+            } else {
+                TopAppBar(
+                    title = { Text("Categories") },
+                    navigationIcon = {
+                        IconButton(onClick = onMenuClick) {
+                            Icon(Icons.Default.Menu, contentDescription = "Menu")
+                        }
+                    }
+                )
+            }
         },
         floatingActionButton = {
             ExtendedFloatingActionButton(
@@ -162,20 +221,49 @@ fun CategoryListScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(uiState.categories) { category ->
+                        val isSelected = selectedIds.contains(category.categoryId)
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(4.dp),
-                            onClick = {
-                                navController.navigate(Routes.itemList(category.categoryId))
-                            }
+                                .padding(4.dp)
+                                .combinedClickable(
+                                    onClick = {
+                                        if (isSelectionMode) {
+                                            selectedIds = if (isSelected) {
+                                                selectedIds - category.categoryId
+                                            } else {
+                                                selectedIds + category.categoryId
+                                            }
+                                        } else {
+                                            navController.navigate(Routes.itemList(category.categoryId))
+                                        }
+                                    },
+                                    onLongClick = {
+                                        if (!isSelectionMode) {
+                                            selectedIds = setOf(category.categoryId)
+                                        }
+                                    }
+                                )
                         ) {
-                            Text(
-                                text = category.name,
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = style.cardTitleColor,
-                                modifier = Modifier.padding(12.dp)
-                            )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                if (isSelectionMode) {
+                                    Checkbox(
+                                        checked = isSelected,
+                                        onCheckedChange = null,
+                                        modifier = Modifier.padding(end = 8.dp)
+                                    )
+                                }
+                                Text(
+                                    text = category.name,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = style.cardTitleColor
+                                )
+                            }
                         }
                     }
                 }
@@ -212,6 +300,76 @@ fun CategoryListScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showAddDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    val currentRenameTarget = renameTarget
+    if (currentRenameTarget != null) {
+        AlertDialog(
+            onDismissRequest = { renameTarget = null },
+            title = { Text("Rename Category") },
+            text = {
+                OutlinedTextField(
+                    value = renameNameText,
+                    onValueChange = { renameNameText = it },
+                    label = { Text("Category Name") },
+                    singleLine = true
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = renameNameText.isNotBlank(),
+                    onClick = {
+                        viewModel.viewModelScope.launch {
+                            viewModel.renameCategory(currentRenameTarget, renameNameText.trim())
+                            renameTarget = null
+                            selectedIds = emptySet()
+                        }
+                    }
+                ) {
+                    Text("Save")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { renameTarget = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("Delete Category") },
+            text = {
+                Text(
+                    if (selectedIds.size == 1) {
+                        "This will also delete every file inside it. This can't be undone."
+                    } else {
+                        "This will also delete every file inside these ${selectedIds.size} categories. This can't be undone."
+                    }
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val toDelete = uiState.categories.filter { selectedIds.contains(it.categoryId) }
+                        viewModel.viewModelScope.launch {
+                            viewModel.deleteCategories(toDelete)
+                            selectedIds = emptySet()
+                            showDeleteConfirm = false
+                        }
+                    }
+                ) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) {
                     Text("Cancel")
                 }
             }
