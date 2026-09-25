@@ -29,34 +29,37 @@ class BootReceiver : BroadcastReceiver() {
 
     private suspend fun rescheduleTimetableReminders(context: Context) {
         val userPreferences = UserPreferences(context)
-        val userName = userPreferences.userName.firstOrNull()
-        val dao = AppDatabase.getInstance(context).timetableDao()
-        val entries = dao.getAllOnce()
-        entries.forEach { entry ->
-            val triggerMillis = ReminderScheduler.computeNextTriggerMillis(
-                dayOfWeek = entry.dayOfWeek,
-                hour = entry.startHour,
-                minute = entry.startMinute,
-                minutesBefore = 5
-            )
-            val title = entry.subjectName
-            val baseBody = buildString {
-                val parts = mutableListOf<String>()
-                entry.room?.takeIf { it.isNotBlank() }?.let { parts.add(it) }
-                entry.teacher?.takeIf { it.isNotBlank() }?.let { parts.add(it) }
-                if (parts.isEmpty()) append("Class starting soon") else append(parts.joinToString(" · "))
+        val isFrozen = userPreferences.isTimetableFrozen.firstOrNull() ?: false
+
+        if (isFrozen) {
+            val untilMillis = userPreferences.timetableFreezeUntilMillis.firstOrNull()
+            when {
+                untilMillis == null -> {
+                    // frozen indefinitely — leave every entry's alarm cancelled
+                    return
+                }
+                untilMillis <= System.currentTimeMillis() -> {
+                    // freeze window already passed while the device was off
+                    TimetableFreezeManager.unfreeze(context)
+                }
+                else -> {
+                    // still frozen — reboot wiped the unfreeze alarm, so re-arm just that
+                    ReminderScheduler.scheduleExactReminder(
+                        context = context,
+                        requestCode = TimetableFreezeManager.UNFREEZE_REQUEST_CODE,
+                        triggerAtMillis = untilMillis,
+                        channelId = NotificationChannels.CHANNEL_CLASS_REMINDERS,
+                        title = "Timetable",
+                        body = "Reminders resumed",
+                        isWeeklyRecurring = false,
+                        receiverClass = TimetableFreezeReceiver::class.java
+                    )
+                }
             }
-            val body = if (userName != null) "Hey $userName, $baseBody" else baseBody
-            ReminderScheduler.scheduleExactReminder(
-                context = context,
-                requestCode = entry.entryId.toInt(),
-                triggerAtMillis = triggerMillis,
-                channelId = NotificationChannels.CHANNEL_CLASS_REMINDERS,
-                title = title,
-                body = body,
-                isWeeklyRecurring = true
-            )
+            return
         }
+
+        TimetableFreezeManager.rescheduleAllEntries(context)
     }
 
     private suspend fun rescheduleStudyTaskReminders(context: Context) {

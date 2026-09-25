@@ -23,6 +23,8 @@ class UserPreferences(context: Context) {
         val IS_DARK_MODE = booleanPreferencesKey("is_dark_mode")
         val USER_NAME = stringPreferencesKey("user_name")
         val SELECTED_PALETTE = stringPreferencesKey("selected_palette")
+        val TIMETABLE_FROZEN = booleanPreferencesKey("timetable_frozen")
+        val TIMETABLE_FREEZE_UNTIL = longPreferencesKey("timetable_freeze_until")
     }
 
     val selectedEducationLevel: Flow<String?> = dataStore.data
@@ -48,6 +50,12 @@ class UserPreferences(context: Context) {
 
     val selectedPalette: Flow<String> = dataStore.data
         .map { preferences -> preferences[SELECTED_PALETTE] ?: "MONOCHROME" }
+
+    val isTimetableFrozen: Flow<Boolean> = dataStore.data
+        .map { preferences -> preferences[TIMETABLE_FROZEN] ?: false }
+
+    val timetableFreezeUntilMillis: Flow<Long?> = dataStore.data
+        .map { preferences -> preferences[TIMETABLE_FREEZE_UNTIL] }
 
     suspend fun setSelectedEducationLevel(level: String?) {
         dataStore.edit { preferences ->
@@ -99,6 +107,14 @@ class UserPreferences(context: Context) {
     suspend fun setSelectedPalette(palette: String) {
         dataStore.edit { preferences ->
             preferences[SELECTED_PALETTE] = palette
+        }
+    }
+
+    suspend fun setTimetableFreeze(frozen: Boolean, untilMillis: Long?) {
+        dataStore.edit { preferences ->
+            preferences[TIMETABLE_FROZEN] = frozen
+            if (untilMillis == null) preferences.remove(TIMETABLE_FREEZE_UNTIL)
+            else preferences[TIMETABLE_FREEZE_UNTIL] = untilMillis
         }
     }
 }

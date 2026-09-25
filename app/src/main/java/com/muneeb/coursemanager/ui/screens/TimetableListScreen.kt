@@ -66,9 +66,11 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavController
 import com.muneeb.coursemanager.data.entities.TimetableEntry
+import com.muneeb.coursemanager.data.preferences.UserPreferences
 import com.muneeb.coursemanager.data.repository.TimetableRepository
 import com.muneeb.coursemanager.navigation.Routes
 import com.muneeb.coursemanager.reminders.ReminderScheduler
+import com.muneeb.coursemanager.reminders.TimetableFreezeManager
 import com.muneeb.coursemanager.ui.components.CountdownTimerText
 import com.muneeb.coursemanager.ui.theme.CopyIcon
 import com.muneeb.coursemanager.ui.theme.LocalAppStyle
@@ -76,16 +78,22 @@ import com.muneeb.coursemanager.ui.util.RequestNotificationPermission
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
 data class TimetableListUiState(
     val entries: List<TimetableEntry> = emptyList(),
     val isLoading: Boolean = true,
     val error: String? = null,
     val entryToDelete: TimetableEntry? = null,
-    val showResetConfirmation: Boolean = false
+    val showResetConfirmation: Boolean = false,
+    val isFrozen: Boolean = false,
+    val freezeUntilMillis: Long? = null
 )
 
 class TimetableListViewModel(
@@ -95,8 +103,11 @@ class TimetableListViewModel(
     private val _uiState = MutableStateFlow(TimetableListUiState())
     val uiState: StateFlow<TimetableListUiState> = _uiState.asStateFlow()
 
+    private val userPreferences = UserPreferences(application)
+
     init {
         loadEntries()
+        observeFreezeState()
     }
 
     private fun loadEntries() {
@@ -109,6 +120,32 @@ class TimetableListViewModel(
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = e.message, isLoading = false) }
             }
+        }
+    }
+
+    private fun observeFreezeState() {
+        viewModelScope.launch {
+            userPreferences.isTimetableFrozen
+                .combine(userPreferences.timetableFreezeUntilMillis) { frozen, until -> frozen to until }
+                .collect { (frozen, until) ->
+                    _uiState.update { it.copy(isFrozen = frozen, freezeUntilMillis = until) }
+                }
+        }
+    }
+
+    suspend fun freezeTimetable(untilMillis: Long?) {
+        try {
+            TimetableFreezeManager.freeze(application, untilMillis)
+        } catch (e: Exception) {
+            _uiState.update { it.copy(error = "Failed to freeze timetable: ${e.message}") }
+        }
+    }
+
+    suspend fun unfreezeTimetable() {
+        try {
+            TimetableFreezeManager.unfreeze(application)
+        } catch (e: Exception) {
+            _uiState.update { it.copy(error = "Failed to unfreeze timetable: ${e.message}") }
         }
     }
 
@@ -202,6 +239,11 @@ private fun computeNextClass(entries: List<TimetableEntry>): TimetableEntry? {
         if (dayEntries.isNotEmpty()) return dayEntries.first()
     }
     return null
+}
+
+private fun formatFreezeUntil(millis: Long): String {
+    val sdf = SimpleDateFormat("EEE, MMM d, h:mm a", Locale.getDefault())
+    return sdf.format(Date(millis))
 }
 
 private fun openMeetingLink(context: Context, link: String) {
@@ -342,6 +384,31 @@ fun TimetableListScreen(
                             nextClass?.let { entry ->
                                 NextClassBanner(entry)
                             }
+
+                            val nextClassStartMillis = nextClass?.let {
+                                ReminderScheduler.computeNextTriggerMillis(
+                                    dayOfWeek = it.dayOfWeek,
+                                    hour = it.startHour,
+                                    minute = it.startMinute,
+                                    minutesBefore = 0
+                                )
+                            }
+
+                            FreezeControl(
+                                isFrozen = uiState.isFrozen,
+                                freezeUntilMillis = uiState.freezeUntilMillis,
+                                nextClassStartMillis = nextClassStartMillis,
+                                onFreeze = { until ->
+                                    viewModel.viewModelScope.launch {
+                                        viewModel.freezeTimetable(until)
+                                    }
+                                },
+                                onUnfreeze = {
+                                    viewModel.viewModelScope.launch {
+                                        viewModel.unfreezeTimetable()
+                                    }
+                                }
+                            )
 
                             val today = Calendar.getInstance().get(Calendar.DAY_OF_WEEK)
                             val todayName = dayNames[today] ?: "Today"
@@ -510,6 +577,95 @@ fun TimetableListScreen(
             },
             dismissButton = {
                 TextButton(onClick = { viewModel.setShowResetConfirmation(false) }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun FreezeControl(
+    isFrozen: Boolean,
+    freezeUntilMillis: Long?,
+    nextClassStartMillis: Long?,
+    onFreeze: (Long?) -> Unit,
+    onUnfreeze: () -> Unit
+) {
+    val style = LocalAppStyle.current
+    var showOptions by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+    ) {
+        if (isFrozen) {
+            val statusText = if (freezeUntilMillis != null) {
+                "Notifications paused until ${formatFreezeUntil(freezeUntilMillis)}"
+            } else {
+                "Notifications paused"
+            }
+            Text(
+                text = statusText,
+                style = MaterialTheme.typography.bodySmall,
+                color = style.cardSubtitleColor,
+                modifier = Modifier.padding(bottom = 4.dp)
+            )
+            TextButton(onClick = onUnfreeze) {
+                Text("Unfreeze Timetable Notifier")
+            }
+        } else {
+            TextButton(onClick = { showOptions = true }) {
+                Text("Freeze Timetable Notifier")
+            }
+        }
+    }
+
+    if (showOptions) {
+        AlertDialog(
+            onDismissRequest = { showOptions = false },
+            title = { Text("Freeze Timetable Notifier") },
+            text = {
+                Column {
+                    Text(
+                        text = "Pause class reminders — choose how long:",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(bottom = 12.dp)
+                    )
+                    TextButton(
+                        onClick = {
+                            onFreeze(nextClassStartMillis)
+                            showOptions = false
+                        },
+                        enabled = nextClassStartMillis != null,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Skip Just The Next Class")
+                    }
+                    TextButton(
+                        onClick = {
+                            onFreeze(System.currentTimeMillis() + 24 * 60 * 60 * 1000L)
+                            showOptions = false
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Freeze For 1 Day")
+                    }
+                    TextButton(
+                        onClick = {
+                            onFreeze(null)
+                            showOptions = false
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Freeze Until I Turn It Back On")
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showOptions = false }) {
                     Text("Cancel")
                 }
             }

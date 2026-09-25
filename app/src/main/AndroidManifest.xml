@@ -36,6 +36,9 @@
         <receiver
             android:name=".reminders.StudyTaskReminderReceiver"
             android:exported="false" />
+        <receiver
+            android:name=".reminders.TimetableFreezeReceiver"
+            android:exported="false" />
 
     </application>
 
