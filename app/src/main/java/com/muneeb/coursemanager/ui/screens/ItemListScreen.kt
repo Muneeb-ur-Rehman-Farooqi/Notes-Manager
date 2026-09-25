@@ -501,7 +501,7 @@ fun ItemListScreen(
                 ) {
                     Icon(Icons.Default.Edit, contentDescription = null)
                     Spacer(modifier = Modifier.padding(start = 12.dp))
-                    Text("Write Note")
+                    Text("Write a note / paste MD files")
                 }
                 Spacer(modifier = Modifier.height(24.dp))
             }

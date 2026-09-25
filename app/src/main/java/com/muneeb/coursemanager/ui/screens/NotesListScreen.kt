@@ -210,7 +210,7 @@ fun NotesListScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "No notes yet.\nTap + to create one.",
+                        text = "No notes yet.\nTap + to add notes / MD files",
                         style = MaterialTheme.typography.bodyLarge,
                         color = style.cardSubtitleColor
                     )
