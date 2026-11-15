@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -27,6 +28,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,6 +45,8 @@ import androidx.navigation.NavController
 import com.github.barteksc.pdfviewer.PDFView
 import com.github.barteksc.pdfviewer.scroll.DefaultScrollHandle
 import com.muneeb.coursemanager.data.repository.ItemRepository
+import com.muneeb.coursemanager.util.FileSharer
+import com.muneeb.coursemanager.util.ShareTarget
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -157,6 +161,7 @@ fun PdfViewerScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
 
     var chromeVisible by remember { mutableStateOf(true) }
     var lastKnownPage by remember(uiState.documentUri) {
@@ -291,6 +296,25 @@ fun PdfViewerScreen(
                     }
                 },
                 actions = {
+                    IconButton(
+                        onClick = {
+                            val uri = uiState.documentUri ?: return@IconButton
+                            scope.launch {
+                                FileSharer.share(
+                                    context,
+                                    listOf(
+                                        ShareTarget(
+                                            uri = uri,
+                                            displayName = uiState.displayName.ifBlank { "document" },
+                                            mimeType = "application/pdf"
+                                        )
+                                    )
+                                )
+                            }
+                        }
+                    ) {
+                        Icon(Icons.Default.Share, contentDescription = "Share")
+                    }
                     TextButton(onClick = { viewModel.toggleNightMode() }) {
                         Text(if (uiState.nightModeEnabled) "Day" else "Night")
                     }

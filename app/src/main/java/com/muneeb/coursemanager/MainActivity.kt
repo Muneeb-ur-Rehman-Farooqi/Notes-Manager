@@ -1,6 +1,9 @@
 package com.muneeb.coursemanager
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -26,6 +29,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.IntentCompat
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
@@ -48,10 +54,11 @@ import com.muneeb.coursemanager.reminders.NotificationChannels
 import com.muneeb.coursemanager.reminders.ReminderScheduler
 import com.muneeb.coursemanager.reminders.StudyTaskReminderReceiver
 import com.muneeb.coursemanager.ui.components.AppDrawerContent
-import com.muneeb.coursemanager.ui.util.RequestNotificationPermission
 import com.muneeb.coursemanager.ui.onboarding.OnboardingViewModel
+import com.muneeb.coursemanager.ui.screens.ShareImportViewModel
 import com.muneeb.coursemanager.ui.theme.NotesManagerTheme
 import com.muneeb.coursemanager.ui.theme.ThemePalette
+import com.muneeb.coursemanager.ui.util.RequestNotificationPermission
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -60,9 +67,21 @@ import kotlinx.coroutines.launch
 import java.util.Calendar
 
 class MainActivity : ComponentActivity() {
+
+    private lateinit var shareImportViewModel: ShareImportViewModel
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+
+        shareImportViewModel = ViewModelProvider(
+            this,
+            ShareImportViewModel.Factory(application)
+        )[ShareImportViewModel::class.java]
+
+        if (savedInstanceState == null) {
+            handleShareIntent(intent)
+        }
 
         NotificationChannels.createChannels(this)
 
@@ -140,6 +159,7 @@ class MainActivity : ComponentActivity() {
                     RequestNotificationPermission { }
 
                     AppContent(
+                        shareImportViewModel = shareImportViewModel,
                         userPreferences = userPreferences,
                         isDarkMode = isDarkMode,
                         selectedPalette = palette,
@@ -158,10 +178,48 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleShareIntent(intent)
+    }
+
+    private fun handleShareIntent(intent: Intent?) {
+        if (intent == null) return
+        if ((intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0) return
+
+        val action = intent.action
+        if (action != Intent.ACTION_SEND && action != Intent.ACTION_SEND_MULTIPLE) return
+
+        val extracted = when (action) {
+            Intent.ACTION_SEND -> {
+                val single = IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java)
+                listOfNotNull(single)
+            }
+            Intent.ACTION_SEND_MULTIPLE -> {
+                IntentCompat.getParcelableArrayListExtra(intent, Intent.EXTRA_STREAM, Uri::class.java)
+                    ?.filterNotNull()
+                    .orEmpty()
+            }
+            else -> emptyList()
+        }
+
+        val uris = extracted.ifEmpty {
+            val clip = intent.clipData
+            if (clip != null) {
+                (0 until clip.itemCount).mapNotNull { clip.getItemAt(it).uri }
+            } else {
+                emptyList()
+            }
+        }
+
+        shareImportViewModel.stage(uris)
+    }
 }
 
 @Composable
 fun AppContent(
+    shareImportViewModel: ShareImportViewModel,
     userPreferences: UserPreferences,
     isDarkMode: Boolean,
     selectedPalette: ThemePalette,
@@ -210,11 +268,39 @@ fun AppContent(
     val navController = rememberNavController()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     val educationLevel by userPreferences.selectedEducationLevel.collectAsState(initial = null)
     val partGrade by userPreferences.selectedPartGrade.collectAsState(initial = null)
     val universityMajor by userPreferences.selectedUniversityMajor.collectAsState(initial = null)
     val currentSemesterId by userPreferences.selectedSemesterId.collectAsState(initial = null)
     val userName by userPreferences.userName.collectAsState(initial = null)
+
+    val navigateRequest by shareImportViewModel.navigateRequest.collectAsState()
+    val shareMessage by shareImportViewModel.message.collectAsState()
+
+    LaunchedEffect(navigateRequest) {
+        if (navigateRequest) {
+            val onboardingPending = startDestination == Routes.EDUCATION_LEVEL ||
+                startDestination == Routes.NAME_ENTRY
+            if (onboardingPending) {
+                shareImportViewModel.cancel()
+                Toast.makeText(context, "Finish setup first", Toast.LENGTH_SHORT).show()
+            } else {
+                navController.navigate(Routes.SHARE_PICKER) {
+                    launchSingleTop = true
+                }
+            }
+            shareImportViewModel.onNavigationHandled()
+        }
+    }
+
+    LaunchedEffect(shareMessage) {
+        val msg = shareMessage
+        if (msg != null) {
+            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+            shareImportViewModel.clearMessage()
+        }
+    }
 
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = currentBackStackEntry?.destination?.route
@@ -232,7 +318,7 @@ fun AppContent(
 
     ModalNavigationDrawer(
         drawerState = drawerState,
-        gesturesEnabled = currentRoute != Routes.PDF_VIEWER,
+        gesturesEnabled = currentRoute != Routes.PDF_VIEWER && currentRoute != Routes.SHARE_PICKER,
         drawerContent = {
             AppDrawerContent(
                 navController = navController,
@@ -276,6 +362,7 @@ fun AppContent(
         AppNavHost(
             navController = navController,
             viewModel = onboardingViewModel,
+            shareImportViewModel = shareImportViewModel,
             startDestination = startDestination!!,
             postNameEntryDestination = postNameEntryDestination,
             onMenuClick = {

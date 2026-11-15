@@ -37,6 +37,9 @@ object Routes {
     // Photo Group Viewer
     const val PHOTO_VIEWER = "photo_viewer/{itemId}"
 
+    // Share Import Picker
+    const val SHARE_PICKER = "share_picker"
+
     // Helper functions
     fun courseList(semesterId: Long) = "course_list/$semesterId"
     fun categoryList(courseId: Long) = "category_list/$courseId"

@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
@@ -67,6 +68,9 @@ import com.muneeb.coursemanager.data.repository.ItemRepository
 import com.muneeb.coursemanager.data.repository.PageRepository
 import com.muneeb.coursemanager.navigation.Routes
 import com.muneeb.coursemanager.ui.theme.LocalAppStyle
+import com.muneeb.coursemanager.util.FileSharer
+import com.muneeb.coursemanager.util.ImportedFileStore
+import com.muneeb.coursemanager.util.ShareTarget
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -225,6 +229,7 @@ fun ItemListScreen(
     var nameDialogText by remember { mutableStateOf("") }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     val context = LocalContext.current
+    val shareScope = rememberCoroutineScope()
 
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -312,6 +317,34 @@ fun ItemListScreen(
                             ) {
                                 Icon(Icons.Default.Edit, contentDescription = "Rename")
                             }
+                        }
+                        IconButton(
+                            onClick = {
+                                val targets = uiState.items
+                                    .filter { selectedItemIds.contains(it.itemId) }
+                                    .filter { it.itemType == ItemType.FILE && it.uri != null }
+                                    .map {
+                                        ShareTarget(
+                                            uri = Uri.parse(it.uri!!),
+                                            displayName = it.displayName,
+                                            mimeType = it.mimeType
+                                        )
+                                    }
+                                if (targets.isEmpty()) {
+                                    Toast.makeText(
+                                        context,
+                                        "Only files can be shared right now",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                } else {
+                                    selectedItemIds = emptySet()
+                                    shareScope.launch {
+                                        FileSharer.share(context, targets)
+                                    }
+                                }
+                            }
+                        ) {
+                            Icon(Icons.Default.Share, contentDescription = "Share")
                         }
                         IconButton(onClick = { showDeleteConfirm = true }) {
                             Icon(Icons.Default.Delete, contentDescription = "Delete")
@@ -589,6 +622,7 @@ fun ItemListScreen(
                         val toDelete = uiState.items.filter { selectedItemIds.contains(it.itemId) }
                         viewModel.viewModelScope.launch {
                             viewModel.deleteItems(toDelete)
+                            toDelete.forEach { ImportedFileStore.deleteIfOwned(context, it.uri) }
                             selectedItemIds = emptySet()
                             showDeleteConfirm = false
                         }

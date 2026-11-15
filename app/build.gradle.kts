@@ -21,14 +21,14 @@ android {
         applicationId = "com.muneeb.coursemanager"
         minSdk = 24
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
     }
 
     signingConfigs {
         create("release") {
             if (keystorePropertiesFile.exists()) {
-                storeFile = file(keystoreProperties["storeFile"] as String)
+                storeFile = rootProject.file(keystoreProperties["storeFile"] as String)
                 storePassword = keystoreProperties["storePassword"] as String
                 keyAlias = keystoreProperties["keyAlias"] as String
                 keyPassword = keystoreProperties["keyPassword"] as String
@@ -36,13 +36,21 @@ android {
         }
     }
 
-    buildTypes {
+    // buildTypes {
+    //     release {
+    //         signingConfig = signingConfigs.getByName("release")
+    //         isMinifyEnabled = false
+    //     }
+    // }
+        buildTypes {
+        debug {
+            applicationIdSuffix = ".dev"
+        }
         release {
             signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
         }
     }
-
     buildFeatures {
         compose = true
     }

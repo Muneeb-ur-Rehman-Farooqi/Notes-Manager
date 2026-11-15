@@ -53,6 +53,9 @@ import com.muneeb.coursemanager.ui.screens.QuickNoteViewerScreen
 import com.muneeb.coursemanager.ui.screens.QuickNoteViewerViewModel
 import com.muneeb.coursemanager.ui.screens.SemesterListScreen
 import com.muneeb.coursemanager.ui.screens.SemesterListViewModel
+import com.muneeb.coursemanager.ui.screens.ShareImportViewModel
+import com.muneeb.coursemanager.ui.screens.SharePickerScreen
+import com.muneeb.coursemanager.ui.screens.SharePickerViewModel
 import com.muneeb.coursemanager.ui.screens.StudyTaskEditorScreen
 import com.muneeb.coursemanager.ui.screens.StudyTaskEditorViewModel
 import com.muneeb.coursemanager.ui.screens.StudyTaskListScreen
@@ -67,6 +70,7 @@ import kotlinx.coroutines.flow.firstOrNull
 fun AppNavHost(
     navController: NavHostController,
     viewModel: OnboardingViewModel,
+    shareImportViewModel: ShareImportViewModel,
     startDestination: String,
     postNameEntryDestination: String,
     onMenuClick: () -> Unit,
@@ -267,6 +271,22 @@ fun AppNavHost(
             PhotoGroupViewerScreen(
                 navController = navController,
                 viewModel = photoViewModel
+            )
+        }
+
+        composable(Routes.SHARE_PICKER) {
+            val factory = SharePickerViewModel.Factory(
+                semesterRepository = semesterRepository,
+                courseRepository = courseRepository,
+                categoryRepository = categoryRepository,
+                itemRepository = itemRepository,
+                userPreferences = userPreferences
+            )
+            val pickerViewModel: SharePickerViewModel = viewModel(factory = factory)
+            SharePickerScreen(
+                navController = navController,
+                viewModel = pickerViewModel,
+                shareImportViewModel = shareImportViewModel
             )
         }
     }
