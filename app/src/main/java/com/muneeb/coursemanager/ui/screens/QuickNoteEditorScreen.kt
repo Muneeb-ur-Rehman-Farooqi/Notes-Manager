@@ -2,14 +2,23 @@ package com.muneeb.coursemanager.ui.screens
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.rememberTextFieldState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -17,8 +26,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,15 +40,17 @@ import com.muneeb.coursemanager.data.repository.QuickNoteRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 data class QuickNoteEditorUiState(
     val isLoading: Boolean = false,
-    val title: String = "",
-    val content: String = "",
+    val initialTitle: String = "",
+    val initialContent: String = "",
     val isSaving: Boolean = false,
-    val error: String? = null,
+    val loadError: String? = null,
+    val saveError: String? = null,
     val isNewNote: Boolean = true
 )
 
@@ -48,73 +58,83 @@ class QuickNoteEditorViewModel(
     private val quickNoteRepository: QuickNoteRepository,
     private val noteId: Long
 ) : ViewModel() {
-    private val _uiState = MutableStateFlow(QuickNoteEditorUiState())
+    private val _uiState = MutableStateFlow(
+        QuickNoteEditorUiState(
+            isLoading = noteId != -1L,
+            isNewNote = noteId == -1L
+        )
+    )
     val uiState: StateFlow<QuickNoteEditorUiState> = _uiState.asStateFlow()
 
     init {
         if (noteId != -1L) {
             loadNote()
-        } else {
-            _uiState.update { it.copy(isNewNote = true) }
         }
     }
 
     private fun loadNote() {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, error = null) }
+            _uiState.update { it.copy(isLoading = true, loadError = null) }
             try {
-                quickNoteRepository.getById(noteId).collect { note ->
-                    if (note != null) {
-                        _uiState.update {
-                            it.copy(
-                                isLoading = false,
-                                title = note.title ?: "",
-                                content = note.content,
-                                isNewNote = false
-                            )
-                        }
-                    } else {
-                        _uiState.update { it.copy(error = "Note not found", isLoading = false) }
+                // Single snapshot load avoids overwriting user edits on background DB emissions
+                val note = quickNoteRepository.getById(noteId).first()
+                if (note != null) {
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            initialTitle = note.title ?: "",
+                            initialContent = note.content,
+                            isNewNote = false
+                        )
                     }
+                } else {
+                    _uiState.update { it.copy(loadError = "Note not found", isLoading = false) }
                 }
             } catch (e: Exception) {
-                _uiState.update { it.copy(error = e.message, isLoading = false) }
+                _uiState.update { it.copy(loadError = e.message ?: "Failed to load note", isLoading = false) }
             }
         }
     }
 
-    fun updateTitle(title: String) {
-        _uiState.update { it.copy(title = title) }
-    }
+    suspend fun saveNote(title: String, content: String): Boolean {
+        if (_uiState.value.isSaving) return false
 
-    fun updateContent(content: String) {
-        _uiState.update { it.copy(content = content) }
-    }
-
-    suspend fun saveNote(): Boolean {
-        val state = _uiState.value
-        if (state.content.isBlank()) {
-            _uiState.update { it.copy(error = "Content cannot be empty") }
+        if (content.isBlank()) {
+            _uiState.update { it.copy(saveError = "Content cannot be empty") }
             return false
         }
-        _uiState.update { it.copy(isSaving = true, error = null) }
+
+        _uiState.update { it.copy(isSaving = true, saveError = null) }
         try {
-            val note = QuickNote(
-                noteId = if (state.isNewNote) 0 else noteId,
-                title = state.title.takeIf { it.isNotBlank() },
-                content = state.content,
-                createdAt = if (state.isNewNote) System.currentTimeMillis() else 0,
-                updatedAt = System.currentTimeMillis()
-            )
-            if (state.isNewNote) {
+            val normalizedTitle = title.trim().takeIf { it.isNotBlank() }
+            if (_uiState.value.isNewNote) {
+                val now = System.currentTimeMillis()
+                val note = QuickNote(
+                    noteId = 0,
+                    title = normalizedTitle,
+                    content = content,
+                    createdAt = now,
+                    updatedAt = now
+                )
                 quickNoteRepository.insert(note)
             } else {
-                quickNoteRepository.update(note)
+                val existing = quickNoteRepository.getById(noteId).first()
+                if (existing == null) {
+                    _uiState.update { it.copy(saveError = "Note not found", isSaving = false) }
+                    return false
+                }
+                quickNoteRepository.update(
+                    existing.copy(
+                        title = normalizedTitle,
+                        content = content,
+                        updatedAt = System.currentTimeMillis()
+                    )
+                )
             }
             _uiState.update { it.copy(isSaving = false) }
             return true
         } catch (e: Exception) {
-            _uiState.update { it.copy(error = e.message, isSaving = false) }
+            _uiState.update { it.copy(saveError = e.message ?: "Failed to save note", isSaving = false) }
             return false
         }
     }
@@ -140,11 +160,20 @@ fun QuickNoteEditorScreen(
     viewModel: QuickNoteEditorViewModel
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val coroutineScope = rememberCoroutineScope()
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (uiState.isNewNote) "New Note" else "Edit Note") }
+                title = { Text(if (uiState.isNewNote) "New Note" else "Edit Note") },
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back"
+                        )
+                    }
+                }
             )
         }
     ) { paddingValues ->
@@ -152,56 +181,71 @@ fun QuickNoteEditorScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
+                .consumeWindowInsets(paddingValues)
+                .imePadding()
                 .padding(16.dp)
         ) {
-            if (uiState.isLoading) {
-                CircularProgressIndicator()
-            } else if (uiState.error != null && uiState.title.isEmpty() && uiState.content.isEmpty()) {
-                Text(
-                    text = "Error: ${uiState.error}",
-                    color = MaterialTheme.colorScheme.error
-                )
-            } else {
-                OutlinedTextField(
-                    value = uiState.title,
-                    onValueChange = { viewModel.updateTitle(it) },
-                    label = { Text("Title (optional)") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                OutlinedTextField(
-                    value = uiState.content,
-                    onValueChange = { viewModel.updateContent(it) },
-                    label = { Text("Content") },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    singleLine = false
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                if (uiState.isSaving) {
+            when {
+                uiState.isLoading -> {
                     CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
-                } else {
-                    Button(
-                        onClick = {
-                            viewModel.viewModelScope.launch {
-                                if (viewModel.saveNote()) {
-                                    navController.popBackStack()
-                                }
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Save")
+                }
+                uiState.loadError != null -> {
+                    Text(
+                        text = "Error: ${uiState.loadError}",
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    OutlinedButton(onClick = { navController.popBackStack() }) {
+                        Text("Go Back")
                     }
                 }
-                if (uiState.error != null && uiState.error?.isNotEmpty() == true) {
-                    Text(
-                        text = "Error: ${uiState.error}",
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(top = 8.dp)
+                else -> {
+                    // Composed only after loading finishes so initialText captures loaded values
+                    val titleState = rememberTextFieldState(initialText = uiState.initialTitle)
+                    val contentState = rememberTextFieldState(initialText = uiState.initialContent)
+
+                    OutlinedTextField(
+                        state = titleState,
+                        label = { Text("Title (optional)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        lineLimits = TextFieldLineLimits.SingleLine
                     )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    OutlinedTextField(
+                        state = contentState,
+                        label = { Text("Content") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    if (uiState.isSaving) {
+                        CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
+                    } else {
+                        Button(
+                            onClick = {
+                                coroutineScope.launch {
+                                    val saved = viewModel.saveNote(
+                                        title = titleState.text.toString(),
+                                        content = contentState.text.toString()
+                                    )
+                                    if (saved) {
+                                        navController.popBackStack()
+                                    }
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Save")
+                        }
+                    }
+                    if (!uiState.saveError.isNullOrEmpty()) {
+                        Text(
+                            text = "Error: ${uiState.saveError}",
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    }
                 }
             }
         }

@@ -37,7 +37,7 @@ import androidx.navigation.NavController
 import com.muneeb.coursemanager.data.repository.QuickNoteRepository
 import com.muneeb.coursemanager.navigation.Routes
 import com.muneeb.coursemanager.ui.theme.LocalAppStyle
-import io.noties.markwon.Markwon
+import com.muneeb.coursemanager.ui.util.NoteMarkdown
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -108,7 +108,10 @@ fun QuickNoteViewerScreen(
     val uiState by viewModel.uiState.collectAsState()
     val style = LocalAppStyle.current
     val context = LocalContext.current
-    val markwon = remember { Markwon.create(context) }
+    val markwon = remember { NoteMarkdown.createMarkwon(context) }
+    val renderedContent = remember(uiState.content) {
+        NoteMarkdown.prepare(uiState.content)
+    }
     // Note content colors are content, not chrome — intentionally not migrated to AppStyle tokens
     val onSurfaceArgb = MaterialTheme.colorScheme.onSurface.toArgb()
     val surfaceArgb = MaterialTheme.colorScheme.surface.toArgb()
@@ -183,10 +186,10 @@ fun QuickNoteViewerScreen(
                                 }
                             },
                             update = { tv ->
-                                tv.textSize = 18f
+                                tv.textSize = NoteMarkdown.BODY_TEXT_SP
                                 tv.setTextColor(onSurfaceArgb)
                                 tv.setBackgroundColor(surfaceArgb)
-                                markwon.setMarkdown(tv, uiState.content)
+                                markwon.setMarkdown(tv, renderedContent)
                             },
                             modifier = Modifier.fillMaxWidth()
                         )
