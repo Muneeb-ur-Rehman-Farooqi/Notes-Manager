@@ -49,6 +49,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -75,6 +76,7 @@ import com.muneeb.coursemanager.ui.components.CountdownTimerText
 import com.muneeb.coursemanager.ui.theme.CopyIcon
 import com.muneeb.coursemanager.ui.theme.LocalAppStyle
 import com.muneeb.coursemanager.ui.util.RequestNotificationPermission
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -220,9 +222,9 @@ private fun entryDetails(entry: TimetableEntry): String {
     return details.joinToString(" · ")
 }
 
-private fun computeNextClass(entries: List<TimetableEntry>): TimetableEntry? {
+private fun computeNextClass(entries: List<TimetableEntry>, nowMillis: Long): TimetableEntry? {
     if (entries.isEmpty()) return null
-    val cal = Calendar.getInstance()
+    val cal = Calendar.getInstance().apply { timeInMillis = nowMillis }
     val today = cal.get(Calendar.DAY_OF_WEEK)
     val nowMinutes = cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE)
 
@@ -239,6 +241,20 @@ private fun computeNextClass(entries: List<TimetableEntry>): TimetableEntry? {
         if (dayEntries.isNotEmpty()) return dayEntries.first()
     }
     return null
+}
+
+private fun computeCurrentClass(entries: List<TimetableEntry>, nowMillis: Long): TimetableEntry? {
+    if (entries.isEmpty()) return null
+    val cal = Calendar.getInstance().apply { timeInMillis = nowMillis }
+    val today = cal.get(Calendar.DAY_OF_WEEK)
+    val nowMinutes = cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE)
+    return entries
+        .filter {
+            it.dayOfWeek == today &&
+                (it.startHour * 60 + it.startMinute) <= nowMinutes &&
+                (it.endHour * 60 + it.endMinute) > nowMinutes
+        }
+        .minByOrNull { it.endHour * 60 + it.endMinute }
 }
 
 private fun formatFreezeUntil(millis: Long): String {
@@ -275,6 +291,14 @@ fun TimetableListScreen(
     val style = LocalAppStyle.current
     var expandedWeek by remember { mutableStateOf(false) }
     var entryForSheet by remember { mutableStateOf<TimetableEntry?>(null) }
+    var nowTick by remember { mutableStateOf(System.currentTimeMillis()) }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(10_000)
+            nowTick = System.currentTimeMillis()
+        }
+    }
 
     val canScheduleExact = ReminderScheduler.canScheduleExactAlarms(context)
 
@@ -380,9 +404,12 @@ fun TimetableListScreen(
                                 .fillMaxSize()
                                 .verticalScroll(rememberScrollState())
                         ) {
-                            val nextClass = computeNextClass(uiState.entries)
-                            nextClass?.let { entry ->
-                                NextClassBanner(entry)
+                            val currentClass = computeCurrentClass(uiState.entries, nowTick)
+                            val nextClass = computeNextClass(uiState.entries, nowTick)
+                            if (currentClass != null) {
+                                NextClassBanner(entry = currentClass, isOngoing = true)
+                            } else if (nextClass != null) {
+                                NextClassBanner(entry = nextClass, isOngoing = false)
                             }
 
                             val nextClassStartMillis = nextClass?.let {
@@ -674,7 +701,7 @@ private fun FreezeControl(
 }
 
 @Composable
-private fun NextClassBanner(entry: TimetableEntry) {
+private fun NextClassBanner(entry: TimetableEntry, isOngoing: Boolean) {
     val context = LocalContext.current
     val style = LocalAppStyle.current
     val today = Calendar.getInstance().get(Calendar.DAY_OF_WEEK)
@@ -697,7 +724,7 @@ private fun NextClassBanner(entry: TimetableEntry) {
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Next class",
+                    text = if (isOngoing) "Ongoing class" else "Next class",
                     style = MaterialTheme.typography.labelMedium
                 )
                 Text(
@@ -745,7 +772,18 @@ private fun NextClassBanner(entry: TimetableEntry) {
                     }
                 }
             }
-            if (isToday) {
+            if (isOngoing) {
+                val targetCal = Calendar.getInstance().apply {
+                    set(Calendar.HOUR_OF_DAY, entry.endHour)
+                    set(Calendar.MINUTE, entry.endMinute)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }
+                CountdownTimerText(
+                    targetMillis = targetCal.timeInMillis,
+                    modifier = Modifier.padding(start = 12.dp)
+                )
+            } else if (isToday) {
                 val targetCal = Calendar.getInstance().apply {
                     set(Calendar.HOUR_OF_DAY, entry.startHour)
                     set(Calendar.MINUTE, entry.startMinute)
