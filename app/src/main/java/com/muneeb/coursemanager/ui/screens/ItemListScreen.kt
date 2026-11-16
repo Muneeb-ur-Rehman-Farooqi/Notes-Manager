@@ -69,17 +69,18 @@ import com.muneeb.coursemanager.data.repository.ItemRepository
 import com.muneeb.coursemanager.data.repository.PageRepository
 import com.muneeb.coursemanager.navigation.Routes
 import com.muneeb.coursemanager.ui.theme.LocalAppStyle
-import com.muneeb.coursemanager.ui.util.OpenDocumentWithWrite
 import com.muneeb.coursemanager.ui.util.OpenMultipleDocumentsWithWrite
 import com.muneeb.coursemanager.util.FileSharer
 import com.muneeb.coursemanager.util.ImportedFileStore
 import com.muneeb.coursemanager.util.ShareTarget
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -200,6 +201,51 @@ class ItemListViewModel(
         }
     }
 
+    suspend fun addFiles(uris: List<Uri>, contentResolver: ContentResolver): Int {
+        try {
+            return withContext(Dispatchers.IO) {
+                var successCount = 0
+                uris.forEachIndexed { index, uri ->
+                    try {
+                        var displayName: String? = null
+                        var size: Long? = null
+                        contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                            if (cursor.moveToFirst()) {
+                                displayName = cursor.getString(
+                                    cursor.getColumnIndexOrThrow(android.provider.OpenableColumns.DISPLAY_NAME)
+                                )
+                                val rawSize = cursor.getLong(
+                                    cursor.getColumnIndexOrThrow(android.provider.OpenableColumns.SIZE)
+                                )
+                                size = if (rawSize > 0) rawSize else null
+                            }
+                        }
+                        val mimeType = contentResolver.getType(uri)
+                        val name = displayName ?: uri.lastPathSegment ?: "File"
+                        val item = Item(
+                            categoryId = categoryId,
+                            itemType = ItemType.FILE,
+                            displayName = stripKnownExtension(name),
+                            uri = uri.toString(),
+                            mimeType = mimeType,
+                            sizeBytes = size,
+                            sortOrder = _uiState.value.items.size + index
+                        )
+                        // No loadData() call - Room Flow re-emits on insert.
+                        itemRepository.insert(item)
+                        successCount++
+                    } catch (e: Exception) {
+                        // Skip this file and continue with the rest.
+                    }
+                }
+                successCount
+            }
+        } catch (e: Exception) {
+            _uiState.update { it.copy(error = "Failed to import files: ${e.message}") }
+            return 0
+        }
+    }
+
     suspend fun renameItem(item: Item, newName: String) {
         try {
             itemRepository.update(item.copy(displayName = newName))
@@ -297,31 +343,43 @@ fun ItemListScreen(
     val shareScope = rememberCoroutineScope()
 
     val filePickerLauncher = rememberLauncherForActivityResult(
-        contract = OpenDocumentWithWrite()
-    ) { uri: Uri? ->
-        if (uri != null) {
-            persistUriPermission(context, uri)
-            var displayName: String? = null
-            var size: Long? = null
-            val cursor = context.contentResolver.query(uri, null, null, null, null)
-            cursor?.use {
-                if (it.moveToFirst()) {
-                    displayName = it.getString(it.getColumnIndexOrThrow(android.provider.OpenableColumns.DISPLAY_NAME))
-                    val rawSize = it.getLong(it.getColumnIndexOrThrow(android.provider.OpenableColumns.SIZE))
-                    size = if (rawSize > 0) rawSize else null
+        contract = OpenMultipleDocumentsWithWrite()
+    ) { uris: List<Uri> ->
+        if (uris.isNotEmpty()) {
+            uris.forEach { uri -> persistUriPermission(context, uri) }
+            if (uris.size == 1) {
+                val uri = uris.first()
+                var displayName: String? = null
+                var size: Long? = null
+                val cursor = context.contentResolver.query(uri, null, null, null, null)
+                cursor?.use {
+                    if (it.moveToFirst()) {
+                        displayName = it.getString(it.getColumnIndexOrThrow(android.provider.OpenableColumns.DISPLAY_NAME))
+                        val rawSize = it.getLong(it.getColumnIndexOrThrow(android.provider.OpenableColumns.SIZE))
+                        size = if (rawSize > 0) rawSize else null
+                    }
+                }
+                val mimeType = context.contentResolver.getType(uri)
+                val defaultName = stripKnownExtension(
+                    displayName ?: uri.lastPathSegment ?: "File"
+                )
+                nameDialogMode = NameDialogMode.ConfirmNewFile(
+                    uri = uri,
+                    size = size,
+                    mimeType = mimeType,
+                    defaultName = defaultName
+                )
+                nameDialogText = defaultName
+            } else {
+                viewModel.viewModelScope.launch {
+                    val count = viewModel.addFiles(uris, context.contentResolver)
+                    Toast.makeText(
+                        context,
+                        "Added $count files",
+                        Toast.LENGTH_SHORT
+                    ).show()
                 }
             }
-            val mimeType = context.contentResolver.getType(uri)
-            val defaultName = stripKnownExtension(
-                displayName ?: uri.lastPathSegment ?: "File"
-            )
-            nameDialogMode = NameDialogMode.ConfirmNewFile(
-                uri = uri,
-                size = size,
-                mimeType = mimeType,
-                defaultName = defaultName
-            )
-            nameDialogText = defaultName
         }
     }
 
