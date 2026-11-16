@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
@@ -43,7 +42,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -61,6 +59,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+
+private const val SEMESTER_NAME_PREFIX = "Semester "
 
 data class SemesterListUiState(
     val semesters: List<Semester> = emptyList(),
@@ -116,9 +116,9 @@ class SemesterListViewModel(
         }
     }
 
-    suspend fun renameSemester(semester: Semester, newNumber: String) {
+    suspend fun renameSemester(semester: Semester, newName: String) {
         try {
-            semesterRepository.update(semester.copy(name = "Semester $newNumber"))
+            semesterRepository.update(semester.copy(name = newName))
         } catch (e: Exception) {
             _uiState.update { it.copy(error = "Failed to rename semester: ${e.message}") }
         }
@@ -150,10 +150,6 @@ class SemesterListViewModel(
     }
 }
 
-/** Pulls the trailing number/word out of a "Semester X" name for pre-filling the rename field. */
-private fun extractSemesterNumber(name: String): String =
-    name.removePrefix("Semester").trim()
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SemesterListScreen(
@@ -165,14 +161,14 @@ fun SemesterListScreen(
     val style = LocalAppStyle.current
 
     var showAddDialog by remember { mutableStateOf(false) }
-    var addNumberText by remember { mutableStateOf("") }
-    var semesterNumber by remember { mutableStateOf("") } // mandatory dialog field
+    var addNameText by remember { mutableStateOf(SEMESTER_NAME_PREFIX) }
+    var mandatoryNameText by remember { mutableStateOf(SEMESTER_NAME_PREFIX) } // mandatory dialog field
 
     var selectedIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
     val isSelectionMode = selectedIds.isNotEmpty()
 
     var renameTarget by remember { mutableStateOf<Semester?>(null) }
-    var renameNumberText by remember { mutableStateOf("") }
+    var renameNameText by remember { mutableStateOf("") }
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
     if (uiState.showMandatoryDialog) {
@@ -181,13 +177,12 @@ fun SemesterListScreen(
             title = { Text("Create Semester") },
             text = {
                 Column {
-                    Text("Please enter a semester number (e.g., 1, 2, 3)")
+                    Text("Enter a name for your semester (e.g. Semester 1)")
                     OutlinedTextField(
-                        value = semesterNumber,
-                        onValueChange = { semesterNumber = it },
-                        label = { Text("Semester Number") },
+                        value = mandatoryNameText,
+                        onValueChange = { mandatoryNameText = it },
+                        label = { Text("Semester Name") },
                         singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
@@ -195,12 +190,11 @@ fun SemesterListScreen(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        val number = semesterNumber.trim()
-                        if (number.isNotBlank()) {
-                            val name = "Semester $number"
+                        val name = mandatoryNameText.trim()
+                        if (name.isNotBlank()) {
                             viewModel.viewModelScope.launch {
                                 viewModel.addSemester(name)
-                                semesterNumber = ""
+                                mandatoryNameText = SEMESTER_NAME_PREFIX
                                 viewModel.dismissMandatoryDialog()
                             }
                         }
@@ -231,7 +225,7 @@ fun SemesterListScreen(
                             IconButton(
                                 onClick = {
                                     renameTarget = singleSelected
-                                    renameNumberText = extractSemesterNumber(singleSelected.name)
+                                    renameNameText = singleSelected.name
                                 }
                             ) {
                                 Icon(Icons.Default.Edit, contentDescription = "Rename")
@@ -255,7 +249,10 @@ fun SemesterListScreen(
         },
         floatingActionButton = {
             ExtendedFloatingActionButton(
-                onClick = { showAddDialog = true },
+                onClick = {
+                    addNameText = SEMESTER_NAME_PREFIX
+                    showAddDialog = true
+                },
                 icon = { Icon(Icons.Default.Add, contentDescription = null) },
                 text = { Text("Add Semester") },
                 containerColor = style.fabContainerColor,
@@ -352,22 +349,21 @@ fun SemesterListScreen(
             title = { Text("Add Semester") },
             text = {
                 OutlinedTextField(
-                    value = addNumberText,
-                    onValueChange = { addNumberText = it },
-                    label = { Text("Semester Number") },
+                    value = addNameText,
+                    onValueChange = { addNameText = it },
+                    label = { Text("Semester Name") },
                     singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth()
                 )
             },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        val number = addNumberText.trim()
-                        if (number.isNotBlank()) {
+                        val name = addNameText.trim()
+                        if (name.isNotBlank()) {
                             viewModel.viewModelScope.launch {
-                                viewModel.addSemester("Semester $number")
-                                addNumberText = ""
+                                viewModel.addSemester(name)
+                                addNameText = SEMESTER_NAME_PREFIX
                                 showAddDialog = false
                             }
                         }
@@ -391,20 +387,19 @@ fun SemesterListScreen(
             title = { Text("Rename Semester") },
             text = {
                 OutlinedTextField(
-                    value = renameNumberText,
-                    onValueChange = { renameNumberText = it },
-                    label = { Text("Semester Number") },
+                    value = renameNameText,
+                    onValueChange = { renameNameText = it },
+                    label = { Text("Semester Name") },
                     singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth()
                 )
             },
             confirmButton = {
                 TextButton(
-                    enabled = renameNumberText.isNotBlank(),
+                    enabled = renameNameText.isNotBlank(),
                     onClick = {
                         viewModel.viewModelScope.launch {
-                            viewModel.renameSemester(currentRenameTarget, renameNumberText.trim())
+                            viewModel.renameSemester(currentRenameTarget, renameNameText.trim())
                             renameTarget = null
                             selectedIds = emptySet()
                         }
