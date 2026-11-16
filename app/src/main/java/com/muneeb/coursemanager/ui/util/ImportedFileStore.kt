@@ -127,4 +127,15 @@ object ImportedFileStore {
             // Ignore malformed URIs or deletion errors
         }
     }
+
+    // Mirrors deleteIfOwned's ownership check without deleting anything.
+    fun isOwned(context: Context, uriString: String?): Boolean {
+        if (uriString.isNullOrBlank()) return false
+        return try {
+            val uri = Uri.parse(uriString)
+            uri.scheme == "content" && uri.authority == authority(context)
+        } catch (_: Exception) {
+            false
+        }
+    }
 }

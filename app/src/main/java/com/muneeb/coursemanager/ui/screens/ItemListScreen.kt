@@ -1,11 +1,12 @@
 package com.muneeb.coursemanager.ui.screens
 
 import android.content.ActivityNotFoundException
+import android.content.ContentResolver
 import android.content.Intent
 import android.net.Uri
+import android.provider.DocumentsContract
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -68,12 +69,15 @@ import com.muneeb.coursemanager.data.repository.ItemRepository
 import com.muneeb.coursemanager.data.repository.PageRepository
 import com.muneeb.coursemanager.navigation.Routes
 import com.muneeb.coursemanager.ui.theme.LocalAppStyle
+import com.muneeb.coursemanager.ui.util.OpenDocumentWithWrite
+import com.muneeb.coursemanager.ui.util.OpenMultipleDocumentsWithWrite
 import com.muneeb.coursemanager.util.FileSharer
 import com.muneeb.coursemanager.util.ImportedFileStore
 import com.muneeb.coursemanager.util.ShareTarget
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -98,6 +102,27 @@ private fun stripKnownExtension(name: String): String {
     val lastDot = name.lastIndexOf('.')
     return if (lastDot > 0 && lastDot < name.length - 1) name.substring(0, lastDot) else name
 }
+
+// Tries read|write persistable grant first, then falls back to read-only.
+private fun persistUriPermission(context: android.content.Context, uri: Uri) {
+    try {
+        context.contentResolver.takePersistableUriPermission(
+            uri,
+            Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+        )
+    } catch (e: SecurityException) {
+        try {
+            context.contentResolver.takePersistableUriPermission(
+                uri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+        } catch (e2: SecurityException) {
+            // ignore
+        }
+    }
+}
+
+data class DeleteResult(val originalsDeleted: Int, val originalsFailed: Int)
 
 data class ItemListUiState(
     val items: List<Item> = emptyList(),
@@ -183,11 +208,50 @@ class ItemListViewModel(
         }
     }
 
-    suspend fun deleteItems(items: List<Item>) {
+    suspend fun deleteItems(
+        items: List<Item>,
+        deleteOriginals: Boolean,
+        contentResolver: ContentResolver,
+        isOwned: (String?) -> Boolean
+    ): DeleteResult {
         try {
+            var originalsDeleted = 0
+            var originalsFailed = 0
+
+            if (deleteOriginals) {
+                // Collect URIs BEFORE deleting rows (cascade would remove Page rows).
+                // Skipped app-owned URIs are handled by deleteIfOwned on the caller side.
+                val uriStrings = mutableListOf<String>()
+                items.forEach { item ->
+                    when (item.itemType) {
+                        ItemType.FILE -> item.uri?.let { if (!isOwned(it)) uriStrings.add(it) }
+                        ItemType.PHOTO_GROUP -> {
+                            val pages = pageRepository.getPagesForItem(item.itemId).first()
+                            pages.forEach { page ->
+                                if (!isOwned(page.photoUri)) uriStrings.add(page.photoUri)
+                            }
+                        }
+                        ItemType.NOTE -> Unit
+                    }
+                }
+                uriStrings.forEach { uriString ->
+                    try {
+                        val ok = DocumentsContract.deleteDocument(
+                            contentResolver,
+                            Uri.parse(uriString)
+                        )
+                        if (ok) originalsDeleted++ else originalsFailed++
+                    } catch (e: Exception) {
+                        originalsFailed++
+                    }
+                }
+            }
+
             items.forEach { itemRepository.delete(it) }
+            return DeleteResult(originalsDeleted, originalsFailed)
         } catch (e: Exception) {
             _uiState.update { it.copy(error = "Failed to delete items: ${e.message}") }
+            return DeleteResult(0, 0)
         }
     }
 
@@ -228,21 +292,15 @@ fun ItemListScreen(
     var nameDialogMode by remember { mutableStateOf<NameDialogMode?>(null) }
     var nameDialogText by remember { mutableStateOf("") }
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var deleteOriginalsChecked by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val shareScope = rememberCoroutineScope()
 
     val filePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
+        contract = OpenDocumentWithWrite()
     ) { uri: Uri? ->
         if (uri != null) {
-            try {
-                context.contentResolver.takePersistableUriPermission(
-                    uri,
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION
-                )
-            } catch (e: SecurityException) {
-                // ignore
-            }
+            persistUriPermission(context, uri)
             var displayName: String? = null
             var size: Long? = null
             val cursor = context.contentResolver.query(uri, null, null, null, null)
@@ -268,19 +326,10 @@ fun ItemListScreen(
     }
 
     val photoPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenMultipleDocuments()
+        contract = OpenMultipleDocumentsWithWrite()
     ) { uris: List<Uri> ->
         if (uris.isNotEmpty()) {
-            uris.forEach { uri ->
-                try {
-                    context.contentResolver.takePersistableUriPermission(
-                        uri,
-                        Intent.FLAG_GRANT_READ_URI_PERMISSION
-                    )
-                } catch (e: SecurityException) {
-                    // ignore
-                }
-            }
+            uris.forEach { uri -> persistUriPermission(context, uri) }
             val defaultName = "Photos - " + SimpleDateFormat(
                 "dd MMM yyyy HH:mm", Locale.getDefault()
             ).format(Date())
@@ -611,20 +660,69 @@ fun ItemListScreen(
         )
     }
 
+    val selectedItems = uiState.items.filter { selectedItemIds.contains(it.itemId) }
+    val canDeleteOriginals = selectedItems.any { item ->
+        when (item.itemType) {
+            ItemType.NOTE -> false
+            ItemType.PHOTO_GROUP -> true
+            ItemType.FILE -> item.uri != null &&
+                    !ImportedFileStore.isOwned(context, item.uri)
+        }
+    }
+
     if (showDeleteConfirm) {
         AlertDialog(
-            onDismissRequest = { showDeleteConfirm = false },
+            onDismissRequest = {
+                showDeleteConfirm = false
+                deleteOriginalsChecked = false
+            },
             title = { Text("Delete") },
-            text = { Text("Are you sure you want to delete ${selectedItemIds.size} item(s)?") },
+            text = {
+                Column {
+                    Text("Are you sure you want to delete ${selectedItemIds.size} item(s)?")
+                    if (canDeleteOriginals) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(
+                                checked = deleteOriginalsChecked,
+                                onCheckedChange = { deleteOriginalsChecked = it }
+                            )
+                            Text("Also delete from phone storage")
+                        }
+                        if (deleteOriginalsChecked) {
+                            Text(
+                                "This permanently deletes the original file from your device and cannot be undone.",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
+                }
+            },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        val toDelete = uiState.items.filter { selectedItemIds.contains(it.itemId) }
+                        val toDelete = selectedItems
+                        val shouldDeleteOriginals = deleteOriginalsChecked && canDeleteOriginals
                         viewModel.viewModelScope.launch {
-                            viewModel.deleteItems(toDelete)
+                            val result = viewModel.deleteItems(
+                                toDelete,
+                                shouldDeleteOriginals,
+                                context.contentResolver,
+                                isOwned = { uri -> ImportedFileStore.isOwned(context, uri) }
+                            )
                             toDelete.forEach { ImportedFileStore.deleteIfOwned(context, it.uri) }
+                            if (shouldDeleteOriginals &&
+                                (result.originalsDeleted + result.originalsFailed) > 0
+                            ) {
+                                val msg = if (result.originalsFailed == 0) {
+                                    "Deleted from device"
+                                } else {
+                                    "Deleted ${result.originalsDeleted} from device, couldn't delete ${result.originalsFailed} (no permission or unsupported)"
+                                }
+                                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                            }
                             selectedItemIds = emptySet()
                             showDeleteConfirm = false
+                            deleteOriginalsChecked = false
                         }
                     }
                 ) {
@@ -632,7 +730,10 @@ fun ItemListScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteConfirm = false }) {
+                TextButton(onClick = {
+                    showDeleteConfirm = false
+                    deleteOriginalsChecked = false
+                }) {
                     Text("Cancel")
                 }
             }
